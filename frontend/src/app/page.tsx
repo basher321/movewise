@@ -14,7 +14,7 @@ export default function HomePage() {
       <section>
         <div className="wrap">
           <div className="head">
-            <h2>Three ways we help you go further</h2>
+            <h2>Ways we help you go further</h2>
             <p>Pick the path that fits your goal. You can combine them.</p>
           </div>
           <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))" }}>

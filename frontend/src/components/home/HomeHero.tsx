@@ -7,10 +7,11 @@ import Tag from "@/components/Tag";
 
 // Home hero from Settings (applyBrand() in the reference). With no home picture, the tracking card is shown.
 export default function HomeHero() {
-  const { settings } = useSettings();
+  const { settings, licence } = useSettings();
   const picture = settings?.hero_url ?? "";
-  // An empty setting falls back to the reference default text (SET0).
-  const tagline = settings ? settings.tagline || "Courses · Study abroad · Jobs abroad" : "";
+  // An empty setting falls back to the reference default text (SET0), plus Visas when Immigration (B19) is licensed.
+  const fallbackTagline = "Courses · Study abroad · Jobs abroad" + (licence?.modules.visa ? " · Visas" : "");
+  const tagline = settings ? settings.tagline || fallbackTagline : "";
   const title = settings ? settings.hero_title || "Build skills here. Build your future anywhere." : "";
   const text = settings
     ? settings.hero_text ||

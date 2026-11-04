@@ -44,7 +44,17 @@ export default function ProfileView({ module }: { module?: Module }) {
   const account: ApplicantAccount | undefined = session.applicants[current];
 
   const tabs = (
-    <div className="seg" role="tablist" style={{ gridTemplateColumns: `repeat(${licensed.length},1fr)`, maxWidth: 600, margin: "0 0 24px" }}>
+    // Four modules do not fit one row at 390px: the tabs wrap onto two rows on narrow screens.
+    <div
+      className="seg"
+      role="tablist"
+      style={{
+        gridTemplateColumns: `repeat(auto-fit,minmax(min(${licensed.length > 3 ? 150 : 100}px,100%),1fr))`,
+        maxWidth: licensed.length > 3 ? 800 : 600,
+        margin: "0 0 24px",
+        borderRadius: 22,
+      }}
+    >
       {licensed.map((m) => (
         <button key={m} type="button" role="tab" aria-selected={m === current} onClick={() => router.push("/profile/" + m)}>
           {MODULE_UI[m].icon} {MODULE_UI[m].name}

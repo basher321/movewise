@@ -71,7 +71,10 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
 .tag{display:inline-block;font-size:13px;font-weight:700;padding:6px 14px;border-radius:99px;margin-bottom:20px;background:color-mix(in srgb,var(--a) 14%,transparent);color:var(--a)}
 .path{transition:transform .15s,border-color .15s}.path:hover{transform:translateY(-4px)}.path b{display:block;margin-top:16px;color:var(--a);font-size:15px}
 .quote p{color:var(--text);font-size:17px;margin-bottom:16px}.quote b{font-size:14px;color:var(--muted)}
-.auth{display:flex;gap:8px;align-items:center}.auth span{font-weight:600;font-size:15px}
+.auth{display:flex;gap:8px;align-items:center;flex-shrink:0}.auth .btn{white-space:nowrap}.auth span{font-weight:600;font-size:15px}
+/* B19: seven menu items. Between 961px and 1120px the menu is a little tighter; up to 960px it moves to its own row. */
+@media (max-width:1120px) and (min-width:961px){nav{gap:14px}nav ul{gap:2px}nav ul a{padding:8px 9px;font-size:14px}}
+@media (max-width:960px){nav{flex-wrap:wrap;padding:10px 0;gap:8px 16px}nav ul{order:3;width:100%;overflow-x:auto;margin:0}.auth{margin-left:auto}}
 dialog{border:0;border-radius:28px;padding:32px;width:min(420px,calc(100% - 32px));background:var(--surface);color:var(--text);box-shadow:0 40px 90px -30px rgba(14,27,61,.7)}
 dialog::backdrop{background:rgba(7,13,29,.6);backdrop-filter:blur(4px)}
 dialog h3{font-size:26px;margin-bottom:6px}dialog .sub{color:var(--muted);margin:0 0 20px;font-size:15px}

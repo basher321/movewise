@@ -211,7 +211,10 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
 
   return (
     <TabPage title="Catalog" sub="What applicants see on the website and in the AI agents' matching. Nothing is deleted: hide or close it instead." actions={actions}>
-      <div className="seg" style={{ maxWidth: parts.length * 190, gridTemplateColumns: "repeat(" + parts.length + ",1fr)", marginBottom: 20 }}>
+      <div
+        className="seg"
+        style={{ maxWidth: parts.length * 190, gridTemplateColumns: "repeat(auto-fit,minmax(min(170px,100%),1fr))", marginBottom: 20, borderRadius: 22 }}
+      >
         {parts.map(([p, label]) => (
           <button key={p} type="button" role="tab" aria-selected={shown === p} onClick={() => setPart(p)}>
             {label}
