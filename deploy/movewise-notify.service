@@ -1,0 +1,22 @@
+# Notification service (B12): sends queued email and WhatsApp messages (the B08 worker only).
+# Copy to /etc/systemd/system/, then: sudo systemctl daemon-reload && sudo systemctl enable --now movewise-notify
+
+[Unit]
+Description=Movewise notification sender
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=movewise
+Group=movewise
+WorkingDirectory=/opt/movewise/backend
+EnvironmentFile=/opt/movewise/backend/.env
+ExecStart=/opt/movewise/backend/.venv/bin/python -m app.notify.run
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

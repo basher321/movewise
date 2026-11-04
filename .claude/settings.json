@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean *)",
+      "Bash(dropdb *)",
+      "Bash(* DROP DATABASE*)",
+      "Bash(* drop database*)",
+      "Bash(* DROP SCHEMA*)",
+      "Bash(* drop schema*)",
+      "Bash(* TRUNCATE *)",
+      "Bash(* truncate *)",
+      "PowerShell(Remove-Item *)",
+      "Read(./.env)",
+      "Read(./**/.env)"
+    ],
+    "ask": [
+      "Bash(rm *)",
+      "Bash(git push *)",
+      "Bash(psql *)",
+      "Bash(npm install *)",
+      "Bash(pip install *)"
+    ]
+  }
+}

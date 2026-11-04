@@ -1,0 +1,61 @@
+"""Make a signed licence key (software owner only). Prints the key only.
+
+Usage (with the backend virtual environment):
+  python tools/licence/make_key.py --private-key <path> --holder "<company>"
+      --modules course,study,job,visa [--expires YYYY-MM-DD]
+"""
+
+import argparse
+import sys
+from datetime import date
+from pathlib import Path
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+
+from app.licence import MODULES, make_key, today_dhaka  # noqa: E402
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="make_key.py", description="Make a signed licence key.")
+    parser.add_argument("--private-key", required=True, help="path to the private key file")
+    parser.add_argument("--holder", required=True, help="company name the licence is for")
+    parser.add_argument("--modules", required=True, help="comma list of: course, study, job, visa")
+    parser.add_argument("--expires", help="last valid day, YYYY-MM-DD (omit for no expiry)")
+    args = parser.parse_args(argv)
+
+    holder = args.holder.strip()
+    if not 1 <= len(holder) <= 200:
+        parser.error("--holder must be 1 to 200 characters")
+
+    modules = [m.strip() for m in args.modules.split(",") if m.strip()]
+    if not modules or len(set(modules)) != len(modules) or any(m not in MODULES for m in modules):
+        parser.error("--modules must be one or more of: course, study, job, visa (no repeats)")
+
+    issued = today_dhaka()
+    expires: date | None = None
+    if args.expires:
+        try:
+            expires = date.fromisoformat(args.expires)
+        except ValueError:
+            parser.error("--expires must be a date like 2027-12-31")
+        if expires < issued:
+            parser.error("--expires is in the past")
+
+    try:
+        private_key = serialization.load_pem_private_key(
+            Path(args.private_key).read_bytes(), password=None
+        )
+    except (OSError, ValueError, TypeError):
+        parser.error("--private-key could not be read as a private key")
+    if not isinstance(private_key, Ed25519PrivateKey):
+        parser.error("--private-key is not an Ed25519 private key")
+
+    print(make_key(private_key, holder, modules, issued, expires))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

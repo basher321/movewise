@@ -1,0 +1,23 @@
+# Next.js website (B12), built with "npm run build". Copy to /etc/systemd/system/, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now movewise-web
+
+[Unit]
+Description=Movewise website (next start)
+After=network-online.target movewise-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=movewise
+Group=movewise
+WorkingDirectory=/opt/movewise/frontend
+EnvironmentFile=-/opt/movewise/frontend/.env.local
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

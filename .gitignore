@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# env files
+.env*
+backend/.env
+!backend/.env.example
+backend/.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploaded documents (B06): never committed
+backend/storage/

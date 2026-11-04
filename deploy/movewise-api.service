@@ -1,0 +1,25 @@
+# FastAPI backend (B12). Copy to /etc/systemd/system/, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now movewise-api
+# Messages are sent by movewise-notify, so the web app runs with NOTIFY_WORKER=off.
+
+[Unit]
+Description=Movewise API (uvicorn)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=movewise
+Group=movewise
+WorkingDirectory=/opt/movewise/backend
+EnvironmentFile=/opt/movewise/backend/.env
+Environment=NOTIFY_WORKER=off
+# Only Nginx on this server may set the visitor's IP (used by the sign-in rate limits).
+ExecStart=/opt/movewise/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

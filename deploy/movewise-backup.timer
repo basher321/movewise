@@ -1,0 +1,13 @@
+# Runs movewise-backup.service every day at 02:30 Bangladesh time (B12). Copy both files to
+# /etc/systemd/system/, then: sudo systemctl daemon-reload && sudo systemctl enable --now movewise-backup.timer
+
+[Unit]
+Description=Daily Movewise backup at 02:30 Asia/Dhaka
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Asia/Dhaka
+# If the server was off at 02:30, run once when it starts again.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
