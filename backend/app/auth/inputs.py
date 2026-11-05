@@ -1,6 +1,7 @@
 """Input rules shared by the sign-up, sign-in and profile endpoints (the same rules as the mock)."""
 
 import re
+import unicodedata
 
 from app.errors import ApiError
 
@@ -67,8 +68,26 @@ def check_password(password: str, label: str = "Password") -> None:
         raise _invalid(f"{label} must be {MIN_PASSWORD} to {MAX_PASSWORD} characters.")
 
 
+_PHONE_SEPARATORS = re.compile(r"[\s\-().]")
+
+
+def normalize_phone(raw: str) -> str:
+    """The phone as typed, made plain: Bengali (or any other script's) digits become 0-9, and
+    spaces, - ( ) . and invisible marks (from copy and paste, such as direction marks or
+    zero-width spaces) are removed. Letters and other characters are kept, so they still fail."""
+    out = []
+    for ch in raw:
+        if unicodedata.category(ch) == "Cf":
+            continue
+        if ch.isdigit() and not ch.isascii():
+            out.append(str(unicodedata.digit(ch)))
+        else:
+            out.append(ch)
+    return _PHONE_SEPARATORS.sub("", "".join(out))
+
+
 def check_phone(raw: str) -> str:
-    phone = re.sub(r"[\s-]", "", raw)
+    phone = normalize_phone(raw)
     if not phone:
         raise _invalid("Please enter your phone number.")
     if not PHONE_RE.fullmatch(phone):

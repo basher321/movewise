@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { myEnrolments, type ApplicantAccount, type Enrolment } from "@/lib/api";
+import { myCertificatePdfUrl, myEnrolments, type ApplicantAccount, type Enrolment } from "@/lib/api";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { ShowToast } from "../admin/Toast";
 import CertificateCanvas from "../course/CertificateCanvas";
@@ -74,6 +74,13 @@ export default function CourseProfile({ account, toast }: { account: ApplicantAc
                   approved: e.certificate_approved,
                 }}
               />
+              {e.certificate_approved ? (
+                <div className="cr" style={{ marginTop: 8 }}>
+                  <a className="btn ghost" href={myCertificatePdfUrl(e.id, true)}>
+                    Download certificate (PDF)
+                  </a>
+                </div>
+              ) : null}
             </div>
           );
         })

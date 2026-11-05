@@ -731,6 +731,8 @@ export interface MyApplication extends AppBase, DocumentsPart, Partial<Interview
   // The latest fee payment and its invoice.
   payment: FeePayment | null;
   invoice: Invoice | null;
+  // B20: the completion letter, once staff issued it.
+  letter: { id: string; issued_at: string; valid: boolean } | null;
 }
 
 export interface FeePayment {
@@ -762,6 +764,8 @@ export interface CaseRow extends AppBase, DocumentsPart, InterviewFields {
   assigned_to: { id: string; name: string; active: boolean } | null;
   // B16: the partner agent who referred this case; null for a direct case.
   agent: { id: string; name: string; active: boolean } | null;
+  // B20: the completion letter, once issued (valid while the case is completed).
+  letter: { id: string; issued_at: string; valid: boolean } | null;
   history: AppEvent[];
   emails: CaseEmail[];
   changed?: string[];
@@ -989,13 +993,63 @@ export interface EnrolResult extends PayStart {
   enrolment: Enrolment;
 }
 
-export interface CertificateCheck {
+export interface CourseCertificateCheck {
+  kind?: undefined;
   valid: true;
   name: string;
   course_title: string;
   duration: string;
   level: string;
   issued_at: string;
+}
+
+// B20: a completion letter (LTR-) is valid while its case is completed.
+export interface LetterCheck {
+  kind: "letter";
+  valid: boolean;
+  name: string;
+  module: AppModule;
+  title: string;
+  issued_at: string | null;
+}
+
+export type CertificateCheck = CourseCertificateCheck | LetterCheck;
+
+// ---------- Certificates, letters and client messages (B20) ----------
+
+export type DocumentKind = "certificate" | "letter";
+
+export interface CertificateView {
+  kind: DocumentKind;
+  id: string; // CERT- or LTR-
+  module: Module;
+  holder_name: string;
+  account_id: string;
+  title: string;
+  subtitle: string;
+  issued_at: string | null;
+  approved: boolean;
+  valid: boolean;
+}
+
+export interface GroupFilters {
+  status?: AppStatus;
+  stage?: number;
+  item_id?: string;
+  has_application?: boolean;
+  enrolment_status?: EnrolmentStatus;
+}
+
+export interface GroupPreview {
+  recipients: number;
+  with_email: number;
+  with_whatsapp: number;
+}
+
+export interface ClientMessage {
+  channels: Channel[];
+  subject: string;
+  body: string;
 }
 
 // ---------- Notifications, enquiries, audit ----------
@@ -1187,4 +1241,40 @@ export interface PartnerFilters {
   module?: Module | "";
   q?: string;
   active?: "true" | "false" | "";
+}
+
+// ---------- agreements and other documents of agents and partners (B21) ----------
+
+export type DocumentOwnerKind = "agent" | "partner";
+
+export const PARTY_DOC_TYPES = ["agreement", "trade_licence", "id_document", "bank_details", "other"] as const;
+export type PartyDocType = (typeof PARTY_DOC_TYPES)[number];
+
+// "expiring" (within 60 days) and "expired" come from valid_until and are never stored.
+export type PartyDocShownStatus = "active" | "expiring" | "expired" | "archived";
+
+export interface PartyDocument {
+  id: string;
+  doc_type: PartyDocType;
+  title: string;
+  original_name: string;
+  mime: string;
+  size_bytes: number;
+  valid_until: string | null;
+  note: string;
+  status: "active" | "archived";
+  shown_status: PartyDocShownStatus;
+  uploaded_at: string;
+  uploaded_by_name: string;
+  archived_at: string | null;
+  archived_by_name: string | null;
+  file_url: string;
+}
+
+export interface PartyDocumentInput {
+  doc_type: PartyDocType;
+  title: string;
+  valid_until: string | null;
+  note: string;
+  file: File;
 }

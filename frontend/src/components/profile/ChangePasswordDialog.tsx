@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { changeMyPassword, type Module } from "@/lib/api";
+import PasswordInput from "../admin/PasswordInput";
 import { errorText } from "../auth/messages";
 import Modal from "../Modal";
 
@@ -38,11 +39,11 @@ export default function ChangePasswordDialog({ module, onClose, onChanged }: Cha
         <div className="fgrid">
           <label className="fl" style={{ gridColumn: "1/-1" }}>
             <span>Current password</span>
-            <input name="currentPassword" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" required autoFocus />
+            <PasswordInput name="currentPassword" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" required autoFocus />
           </label>
           <label className="fl" style={{ gridColumn: "1/-1" }}>
             <span>New password (6+ characters)</span>
-            <input name="newPassword" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" required />
+            <PasswordInput name="newPassword" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" required />
           </label>
         </div>
         <p className="err" role="alert">

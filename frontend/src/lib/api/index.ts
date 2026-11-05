@@ -168,3 +168,27 @@ export {
   uploadPartnerLogo,
   clearPartnerLogo,
 } from "./http/partners";
+
+// agreements and other documents of agents and partners (B21). Archived, never deleted.
+export {
+  listPartyDocuments,
+  uploadPartyDocument,
+  archivePartyDocument,
+  MAX_PARTY_DOCUMENT_BYTES,
+} from "./http/partyDocuments";
+
+// certificates, completion letters and client messages (B20)
+export {
+  getEnrolmentCertificate,
+  enrolmentCertificatePdfUrl,
+  sendEnrolmentCertificate,
+  getCaseLetter,
+  caseLetterPdfUrl,
+  issueCaseLetter,
+  sendCaseLetter,
+  myCertificatePdfUrl,
+  myLetterPdfUrl,
+  sendClientMessage,
+  previewGroupMessage,
+  sendGroupMessage,
+} from "./http/certificates";

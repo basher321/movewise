@@ -23,6 +23,8 @@ export const securityHeaders = [
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // B22: the build runs on the PC and the small standalone folder is uploaded to cPanel.
+  output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
   async headers() {

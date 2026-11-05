@@ -3,6 +3,8 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { applicantSignIn, applicantSignUp, forgotPassword, getPasswordOptions, isApiError, MODULES, type Module } from "@/lib/api";
+import { checkUsername } from "@/lib/username";
+import PasswordInput from "../admin/PasswordInput";
 import Modal from "../Modal";
 import type { AuthRequest } from "../SessionProvider";
 import { useSettings } from "../SettingsProvider";
@@ -45,6 +47,8 @@ export default function AuthDialog({ request, onClose, onSignedIn }: AuthDialogP
   const [canEmail, setCanEmail] = useState(false);
   const [forgotLogin, setForgotLogin] = useState("");
   const [linkSent, setLinkSent] = useState(false);
+  // Sign up: what is wrong with the username, shown while typing (the server has the same rule).
+  const usernameCheck = checkUsername(username);
 
   useEffect(() => {
     if (step !== "forgot") return;
@@ -105,6 +109,7 @@ export default function AuthDialog({ request, onClose, onSignedIn }: AuthDialogP
       setError("");
       if (mode === "up" && !name.trim()) return setError("Please enter your full name.");
       if (!username.trim()) return setError(mode === "up" ? "Please choose a username." : "Please enter your username.");
+      if (mode === "up" && usernameCheck.problem) return setError(usernameCheck.problem);
       if (password.length < 6) return setError("Password must be at least 6 characters.");
       try {
         if (mode === "up") await applicantSignUp(module, { name, username, password, email, phone });
@@ -204,10 +209,25 @@ export default function AuthDialog({ request, onClose, onSignedIn }: AuthDialogP
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
+          aria-invalid={up && !!usernameCheck.problem}
+          aria-describedby={up ? "username-hint" : undefined}
         />
-        <input
+        {up ? (
+          // Not in the reference: a small hint in the muted / .err text style, so the rule is clear before sending.
+          <small id="username-hint" aria-live="polite" style={{ marginTop: -8, fontSize: 13, color: usernameCheck.problem ? "#DC2626" : "var(--muted)" }}>
+            {usernameCheck.problem ?? "3 to 30 English letters, numbers, . or _ (no spaces). Example: rahim_uddin"}
+            {usernameCheck.suggestion ? (
+              <>
+                {" "}
+                <button type="button" className="lk" style={{ fontSize: 13 }} onClick={() => setUsername(usernameCheck.suggestion ?? "")}>
+                  Use {usernameCheck.suggestion}
+                </button>
+              </>
+            ) : null}
+          </small>
+        ) : null}
+        <PasswordInput
           name="password"
-          type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password (6+ characters)"

@@ -4,17 +4,20 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   addInternalNote,
   APP_STATUSES,
+  caseLetterPdfUrl,
   changeStage,
   changeStatus,
   COUNTRY_FLAGS,
   INTERVIEW_RESULTS,
   isApiError,
+  issueCaseLetter,
   listApplicantAccounts,
   listApplications,
   listAssignableAdmins,
   listInvoices,
   resendNotification,
   sendCaseEmail,
+  sendCaseLetter,
   updateCase,
   type AdminUser,
   type AppDocument,
@@ -23,6 +26,7 @@ import {
   type ApplicantRow,
   type CaseChanges,
   type CaseRow,
+  type Channel,
   type Invoice,
   type InterviewResult,
   type ShownDocStatus,
@@ -37,6 +41,7 @@ import { errorText } from "../auth/messages";
 import InvoiceDialog from "../payment/InvoiceDialog";
 import AdminTable from "./AdminTable";
 import CaseAgentDialog from "./CaseAgentDialog";
+import { ChannelPicker, GroupMessageDialog, MessageDialog, SendDocumentDialog } from "./ClientMessaging";
 import { RejectDocDialog, VerifyDocDialog } from "./DocReviewDialogs";
 import { TextField } from "./Field";
 import TabPage from "./TabPage";
@@ -68,16 +73,16 @@ const WORDS: Record<AppModule, { title: string; who: string; provider: string; b
     who: "Student",
     provider: "university",
     badge: "Student",
-    emailApplicant: "✉ Email applicant",
+    emailApplicant: "✉ Message applicant",
     emailProvider: "✉ Email university",
   },
-  job: { title: "Job Processing", who: "Job holder", provider: "employer", badge: "Job", emailApplicant: "✉ Email job holder", emailProvider: "✉ Email employer" },
+  job: { title: "Job Processing", who: "Job holder", provider: "employer", badge: "Job", emailApplicant: "✉ Message job holder", emailProvider: "✉ Email employer" },
   visa: {
     title: "Immigration Processing",
     who: "Applicant",
     provider: "embassy",
     badge: "Visa",
-    emailApplicant: "✉ Email applicant",
+    emailApplicant: "✉ Message applicant",
     emailProvider: "✉ Email embassy",
   },
 };
@@ -98,6 +103,8 @@ export default function CasesTab({ module, admin, toast, onSignedOut }: Props) {
   const [accounts, setAccounts] = useState<ApplicantRow[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [shownInvoice, setShownInvoice] = useState<Invoice | null>(null);
+  const [messageTo, setMessageTo] = useState<ApplicantRow | null>(null);
+  const [groupOpen, setGroupOpen] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -139,7 +146,15 @@ export default function CasesTab({ module, admin, toast, onSignedOut }: Props) {
   const reload = () => void load();
 
   return (
-    <TabPage title={words.title} sub="Every application: stage, status, documents, history and emails.">
+    <TabPage
+      title={words.title}
+      sub="Every application: stage, status, documents, history and emails."
+      actions={
+        <button className="btn ghost sm" type="button" onClick={() => setGroupOpen(true)}>
+          ✉ Message a group
+        </button>
+      }
+    >
       <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", marginBottom: 18 }}>
         <div className="card">
           <p>Applications{status ? " (" + STATUS[status][0].toLowerCase() + ")" : ""}</p>
@@ -222,7 +237,18 @@ export default function CasesTab({ module, admin, toast, onSignedOut }: Props) {
               ),
             },
             { head: "Joined", cell: (a) => formatDate(a.created_at) },
-            { head: "", right: true, cell: (a) => <ResetPasswordButton accountId={a.id} name={a.name} /> },
+            {
+              head: "",
+              right: true,
+              cell: (a) => (
+                <>
+                  <button className="lk" type="button" onClick={() => setMessageTo(a)}>
+                    Send message
+                  </button>{" "}
+                  <ResetPasswordButton accountId={a.id} name={a.name} />
+                </>
+              ),
+            },
           ]}
         />
       </div>
@@ -258,6 +284,31 @@ export default function CasesTab({ module, admin, toast, onSignedOut }: Props) {
         />
       </div>
       <InvoiceDialog invoice={shownInvoice} open={shownInvoice !== null} onClose={() => setShownInvoice(null)} />
+      {messageTo ? (
+        <MessageDialog
+          accountId={messageTo.id}
+          name={messageTo.name}
+          email={messageTo.email}
+          phone={messageTo.phone || null}
+          onClose={() => setMessageTo(null)}
+          onDone={(n) => {
+            setMessageTo(null);
+            toast(n + (n === 1 ? " message" : " messages") + " queued.");
+          }}
+          onSignedOut={onSignedOut}
+        />
+      ) : null}
+      {groupOpen ? (
+        <GroupMessageDialog
+          module={module}
+          onClose={() => setGroupOpen(false)}
+          onDone={(people, n) => {
+            setGroupOpen(false);
+            toast(n + " messages queued for " + people + (people === 1 ? " client." : " clients."));
+          }}
+          onSignedOut={onSignedOut}
+        />
+      ) : null}
     </TabPage>
   );
 }
@@ -290,6 +341,7 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
   const [review, setReview] = useState<{ doc: AppDocument; kind: "verify" | "reject" } | null>(null);
   const [viewing, setViewing] = useState<AppDocument | null>(null);
   const [pickAgent, setPickAgent] = useState(false);
+  const [sendLetter, setSendLetter] = useState(false);
   const [note, setNote] = useState("");
   // Case box
   const [status, setStatus] = useState<AppStatus>(r.status);
@@ -555,6 +607,59 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
         )}
       </div>
 
+      {r.status === "completed" || r.letter ? (
+        <div style={{ marginTop: 18 }}>
+          <h4 style={{ margin: "0 0 6px" }}>
+            Completion letter{" "}
+            {r.letter ? (
+              r.letter.valid ? (
+                <span className="bd ok">Issued</span>
+              ) : (
+                <span className="bd no">Not valid (case reopened)</span>
+              )
+            ) : (
+              <span className="bd">Not issued</span>
+            )}
+          </h4>
+          <div className="xrow">
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <b>{r.letter ? r.letter.id : "Draft preview"}</b>
+              <small>{r.letter ? "Issued " + formatDate(r.letter.issued_at) : "Issue the letter to send it to the client."}</small>
+            </div>
+            <div className="cr" style={{ margin: 0, gap: 8 }}>
+              <a className="lk" href={caseLetterPdfUrl(r.id)} target="_blank" rel="noopener">
+                View
+              </a>
+              <a className="lk" href={caseLetterPdfUrl(r.id, true)}>
+                Download PDF
+              </a>
+              {r.letter ? (
+                r.letter.valid ? (
+                  <button type="button" className="btn sm" onClick={() => setSendLetter(true)}>
+                    Send
+                  </button>
+                ) : null
+              ) : (
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() =>
+                    void issueCaseLetter(r.id)
+                      .then((l) => {
+                        toast("Completion letter " + l.id + " issued.");
+                        onChanged();
+                      })
+                      .catch(onFail)
+                  }
+                >
+                  Issue completion letter
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <details style={{ marginTop: 16 }}>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>History ({r.history.length})</summary>
         <div className="hist" style={{ marginTop: 8 }}>
@@ -610,13 +715,28 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
           onClose={() => setEmailTo(null)}
           onDone={() => {
             setEmailTo(null);
-            toast("Email queued.");
+            toast("Message queued.");
             onChanged();
           }}
           onSignedOut={onSignedOut}
         />
       ) : null}
       {viewing ? <DocumentViewer doc={viewing} onClose={() => setViewing(null)} /> : null}
+      {sendLetter && r.letter ? (
+        <SendDocumentDialog
+          title={"Send completion letter " + r.letter.id}
+          email={r.applicant.email}
+          phone={r.applicant.phone || null}
+          send={(channels) => sendCaseLetter(r.id, channels)}
+          onClose={() => setSendLetter(false)}
+          onDone={(n) => {
+            setSendLetter(false);
+            toast(n + (n === 1 ? " message" : " messages") + " queued.");
+            onChanged();
+          }}
+          onSignedOut={onSignedOut}
+        />
+      ) : null}
       {pickAgent ? (
         <CaseAgentDialog row={r} module={module} onClose={() => setPickAgent(false)} onDone={() => (setPickAgent(false), toast("Agent saved."), onChanged())} onSignedOut={onSignedOut} />
       ) : null}
@@ -705,16 +825,20 @@ function EmailDialog({ row: r, to, company, providerName, onClose, onDone, onSig
           ".\n\n\nBest regards,\n" +
           company,
   );
+  const [channels, setChannels] = useState<Channel[]>(
+    (["email", "whatsapp"] as Channel[]).filter((c) => (c === "email" ? !!r.applicant.email : !!r.applicant.phone)),
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function send(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (busy) return;
+    if (applicant && !channels.length) return setError("Please choose email, WhatsApp or both.");
     if (!subject.trim() || !body.trim()) return setError("Please write the subject and the message.");
     setBusy(true);
     try {
-      await sendCaseEmail(r.id, to, subject.trim(), body.trim());
+      await sendCaseEmail(r.id, to, subject.trim(), body.trim(), applicant ? channels : undefined);
       onDone();
     } catch (err) {
       if (isApiError(err) && err.code === "UNAUTHENTICATED") return onSignedOut();
@@ -724,15 +848,11 @@ function EmailDialog({ row: r, to, company, providerName, onClose, onDone, onSig
   }
 
   return (
-    <Modal open title={applicant ? "Email the applicant" : "Email the " + WORDS[r.module].provider} onClose={onClose}>
+    <Modal open title={applicant ? "Message the applicant" : "Email the " + WORDS[r.module].provider} onClose={onClose}>
       <form noValidate onSubmit={(e) => void send(e)}>
-        <p className="sub">
-          To:{" "}
-          {applicant
-            ? [r.applicant.email, r.applicant.phone ? "WhatsApp " + r.applicant.phone : ""].filter(Boolean).join(" and ") || "the profile only (no email or phone on file)"
-            : r.provider_email}
-        </p>
+        {applicant ? null : <p className="sub">To: {r.provider_email}</p>}
         <div className="fgrid">
+          {applicant ? <ChannelPicker value={channels} onChange={setChannels} email={r.applicant.email} phone={r.applicant.phone || null} /> : null}
           <TextField label="Subject" value={subject} onChange={setSubject} required full />
           <TextField label="Message" value={body} onChange={setBody} area={8} required full />
         </div>

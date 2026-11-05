@@ -5,6 +5,7 @@ import IfLicensed from "./IfLicensed";
 import { useSettings } from "./SettingsProvider";
 
 // Footer text and links from Settings; "Verify certificate" only when the course module is licensed.
+// Staff pages (/admin, /super-admin) are not linked from public pages; staff open those URLs directly.
 export default function FooterBrand({ year }: { year: string }) {
   const { settings } = useSettings();
   return (
@@ -28,14 +29,6 @@ export default function FooterBrand({ year }: { year: string }) {
           </>
         ) : null}
         <Link href="/profile">Student login</Link>
-        {" · "}
-        <Link href="/admin" style={{ fontWeight: 600 }}>
-          Admin panel
-        </Link>
-        {" · "}
-        <Link href="/super-admin" style={{ fontWeight: 600 }}>
-          Super Admin
-        </Link>
       </span>
     </div>
   );

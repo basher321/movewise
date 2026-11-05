@@ -23,6 +23,7 @@ import { PARTNER_TYPE_LABELS } from "../PartnerStrip";
 import { errorText } from "../auth/messages";
 import AdminTable from "./AdminTable";
 import FormDialog, { type FormValues } from "./FormDialog";
+import PartyDocumentsDialog from "./PartyDocumentsDialog";
 import TabPage from "./TabPage";
 import { handleFailure } from "./failure";
 import type { ShowToast } from "./Toast";
@@ -53,6 +54,7 @@ export default function PartnersTab({ admin, licence, toast, onSignedOut }: Prop
   const [rows, setRows] = useState<Partner[] | null>(null);
   const [editing, setEditing] = useState<Partner | "new" | null>(null);
   const [logoFor, setLogoFor] = useState<Partner | null>(null);
+  const [docsFor, setDocsFor] = useState<Partner | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -142,6 +144,9 @@ export default function PartnersTab({ admin, licence, toast, onSignedOut }: Prop
                 right: true,
                 cell: (p) => (
                   <span className="cr" style={{ margin: 0, justifyContent: "flex-end" }}>
+                    <button className="lk" type="button" onClick={() => setDocsFor(p)}>
+                      Documents
+                    </button>
                     <button className="lk" type="button" onClick={() => setLogoFor(p)}>
                       Logo
                     </button>
@@ -178,6 +183,18 @@ export default function PartnersTab({ admin, licence, toast, onSignedOut }: Prop
             toast(message);
             void load();
           }}
+        />
+      ) : null}
+      {docsFor ? (
+        // Whoever sees a partner here may edit it, so they may also upload and archive its documents.
+        <PartyDocumentsDialog
+          kind="partner"
+          ownerId={docsFor.id}
+          ownerName={docsFor.name}
+          canEdit
+          onClose={() => setDocsFor(null)}
+          onSignedOut={onSignedOut}
+          onChanged={toast}
         />
       ) : null}
     </TabPage>

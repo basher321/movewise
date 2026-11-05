@@ -20,6 +20,7 @@ from sqlalchemy.engine import Connection, RowMapping
 from app.applications import add_event, fee_now, item_row, item_title, parse_id
 from app.audit import write_audit
 from app.auth.deps import Applicant, current_applicant, current_applicant_row
+from app.auth.inputs import normalize_phone
 from app.config import get_settings
 from app.db.engine import get_conn
 from app.errors import ApiError, parse_body
@@ -137,7 +138,7 @@ def start_payment(
     method = body.method
     if method not in METHODS:
         raise _invalid("Please choose a payment method.")
-    phone = re.sub(r"[\s-]", "", body.phone)
+    phone = normalize_phone(body.phone)
     if not BD_MOBILE.fullmatch(phone):
         raise _invalid("Please enter a valid Bangladeshi mobile number, like 01712345678.")
     manual_ref = body.manual_ref.strip()

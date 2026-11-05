@@ -19,6 +19,7 @@ import { errorText } from "../auth/messages";
 import AdminTable from "./AdminTable";
 import CommissionsPanel, { SECTION_NAMES } from "./CommissionsPanel";
 import FormDialog, { type FieldSpec, type FormValues } from "./FormDialog";
+import PartyDocumentsDialog from "./PartyDocumentsDialog";
 import TabPage from "./TabPage";
 import { handleFailure } from "./failure";
 import type { ShowToast } from "./Toast";
@@ -48,6 +49,7 @@ export default function AgentsTab({ admin, licence, toast, onSignedOut }: Props)
   const [rows, setRows] = useState<PartnerAgent[] | null>(null);
   const [all, setAll] = useState<PartnerAgent[]>([]);
   const [editing, setEditing] = useState<PartnerAgent | "new" | null>(null);
+  const [docsFor, setDocsFor] = useState<PartnerAgent | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -152,12 +154,18 @@ export default function AgentsTab({ admin, licence, toast, onSignedOut }: Props)
                   {
                     head: "",
                     right: true,
-                    cell: (a) =>
-                      isSuper ? (
-                        <button className="lk" type="button" onClick={() => setEditing(a)}>
-                          Edit
+                    cell: (a) => (
+                      <span className="cr" style={{ margin: 0, justifyContent: "flex-end" }}>
+                        <button className="lk" type="button" onClick={() => setDocsFor(a)}>
+                          Documents
                         </button>
-                      ) : null,
+                        {isSuper ? (
+                          <button className="lk" type="button" onClick={() => setEditing(a)}>
+                            Edit
+                          </button>
+                        ) : null}
+                      </span>
+                    ),
                   },
                 ]}
               />
@@ -176,6 +184,17 @@ export default function AgentsTab({ admin, licence, toast, onSignedOut }: Props)
             toast(message);
             void load();
           }}
+        />
+      ) : null}
+      {docsFor ? (
+        <PartyDocumentsDialog
+          kind="agent"
+          ownerId={docsFor.id}
+          ownerName={docsFor.name}
+          canEdit={isSuper}
+          onClose={() => setDocsFor(null)}
+          onSignedOut={onSignedOut}
+          onChanged={toast}
         />
       ) : null}
     </TabPage>

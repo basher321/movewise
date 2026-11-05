@@ -19,6 +19,8 @@ from typing import Any, TypeVar
 from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection
 
+from app.certificates import service as certificate_service
+from app.certificates.pdf import render
 from app.db.engine import get_engine
 from app.notify import email_smtp, whatsapp
 from app.notify.email_smtp import MailConfig, SendResult
@@ -114,7 +116,8 @@ def _claim(conn: Connection) -> list[dict[str, Any]]:
     room = {"email": PER_MINUTE - int(sent.get("email", 0)), "whatsapp": PER_MINUTE - int(sent.get("whatsapp", 0))}
     rows = conn.execute(
         text(
-            "SELECT id, channel, to_address, to_name, event, subject, body, tries FROM notifications "
+            "SELECT id, channel, to_address, to_name, event, subject, body, tries, attachment_kind, attachment_ref "
+            "FROM notifications "
             "WHERE status = 'queued' AND sending_since IS NULL AND next_attempt_at <= now() "
             "ORDER BY next_attempt_at, at, id LIMIT :limit FOR UPDATE SKIP LOCKED"
         ),
@@ -176,11 +179,25 @@ def _save(conn: Connection, row: dict[str, Any], result: SendResult | None) -> N
     logger.warning("Notification %s failed: %s", row["id"], error)
 
 
-def deliver(row: dict[str, Any], mail: MailConfig | None, wa: WhatsappConfig | None) -> SendResult | None:
+def attachment_for(conn: Connection, row: dict[str, Any]) -> tuple[str, bytes] | None:
+    """B20: the certificate or letter PDF for an email, built now (never stored). None when the row
+    has no attachment. Raises LookupError when it is no longer valid, so it is never sent."""
+    if not row.get("attachment_ref"):
+        return None
+    found = certificate_service.find(conn, row["attachment_ref"])
+    if found is None or not found.view["valid"]:
+        raise LookupError("The certificate or letter is no longer valid.")
+    return certificate_service.file_name(found), render(found.doc)
+
+
+def deliver(
+    row: dict[str, Any], mail: MailConfig | None, wa: WhatsappConfig | None, attachment: tuple[str, bytes] | None = None
+) -> SendResult | None:
     if row["channel"] == "email":
         if mail is None:
             return None
-        return email_smtp.send(mail, row["to_address"], row["to_name"], row["subject"], row["body"])
+        files = (attachment,) if attachment else ()
+        return email_smtp.send(mail, row["to_address"], row["to_name"], row["subject"], row["body"], files)
     if wa is None:
         return None
     return whatsapp.send(wa, row["to_address"], row["body"])
@@ -195,7 +212,12 @@ def process_once(run: Runner[Any] = engine_runner) -> int:
     configs: tuple[MailConfig | None, WhatsappConfig | None] = run(lambda c: (mail_config(c), whatsapp_config(c)))
     for row in claimed:
         try:
-            result = deliver(row, *configs)
+            attachment = run(lambda c, r=row: attachment_for(c, r)) if row["channel"] == "email" else None
+        except LookupError as exc:
+            run(lambda c, r=row, e=str(exc): _save(c, r, SendResult(ok=False, temporary=False, error=e)))
+            continue
+        try:
+            result = deliver(row, *configs, attachment)
         except Exception:  # never let one message stop the round
             logger.exception("Notification %s could not be sent", row["id"])
             result = SendResult(ok=False, temporary=True, error="Unexpected error")

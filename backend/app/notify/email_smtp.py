@@ -52,7 +52,12 @@ def _connect(config: MailConfig) -> smtplib.SMTP:
 SMTP_FACTORY: Callable[[MailConfig], smtplib.SMTP] = _connect
 
 
-def build_message(config: MailConfig, to: str, to_name: str, subject: str, body: str) -> EmailMessage:
+Attachment = tuple[str, bytes]  # (file name, PDF bytes)
+
+
+def build_message(
+    config: MailConfig, to: str, to_name: str, subject: str, body: str, attachments: tuple[Attachment, ...] = ()
+) -> EmailMessage:
     message = EmailMessage()
     message["From"] = formataddr((config.sender_name or config.company_name, config.sender_email))
     message["To"] = formataddr((to_name, to)) if to_name else to
@@ -74,6 +79,9 @@ def build_message(config: MailConfig, to: str, to_name: str, subject: str, body:
         f"{'<br>' + footer if footer else ''}</p></body></html>",
         subtype="html",
     )
+    # B20: certificates and letters go as PDF attachments.
+    for name, data in attachments:
+        message.add_attachment(data, maintype="application", subtype="pdf", filename=name)
     return message
 
 
@@ -82,8 +90,10 @@ def _short(error: object, config: MailConfig) -> str:
     return text[:200]
 
 
-def send(config: MailConfig, to: str, to_name: str, subject: str, body: str) -> SendResult:
-    message = build_message(config, to, to_name, subject, body)
+def send(
+    config: MailConfig, to: str, to_name: str, subject: str, body: str, attachments: tuple[Attachment, ...] = ()
+) -> SendResult:
+    message = build_message(config, to, to_name, subject, body, attachments)
     try:
         client = SMTP_FACTORY(config)
         try:

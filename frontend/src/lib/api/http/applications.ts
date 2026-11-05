@@ -2,6 +2,7 @@
 
 import { ApiError } from "../errors";
 import type {
+  Channel,
   AppDocument,
   AppModule,
   AppStatus,
@@ -72,8 +73,9 @@ export const updateCase = (id: string, changes: CaseChanges) => patch<CaseRow>("
 
 export const addInternalNote = (id: string, note: string) => post<CaseRow>(`/admin/applications/${id}/notes`, { note });
 
-export const sendCaseEmail = (id: string, to: "applicant" | "provider", subject: string, body: string) =>
-  post<CaseRow>(`/admin/applications/${id}/email`, { to, subject, body });
+// B20: channels (email, WhatsApp or both) apply to messages to the applicant.
+export const sendCaseEmail = (id: string, to: "applicant" | "provider", subject: string, body: string, channels?: Channel[]) =>
+  post<CaseRow>(`/admin/applications/${id}/email`, { to, subject, body, ...(channels ? { channels } : {}) });
 
 export const listApplicantAccounts = (module: Module) => get<ApplicantRow[]>("/admin/accounts", { module });
 

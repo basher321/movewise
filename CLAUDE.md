@@ -84,3 +84,5 @@ Safety rules (never break these, even if asked in a prompt)
   explain what it will do and wait for my yes.
 - A database change is made only by adding a new numbered migration file. Never edit or delete
   an old migration.
+- Exception: deployment work on the live cPanel server nextglp@s13842.bom1.stableserver.net is
+  allowed over SSH. I still explain each command that changes something and wait for a yes.

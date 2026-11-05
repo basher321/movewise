@@ -61,9 +61,9 @@ def clean_name(name: str) -> str:
     return base or "document"
 
 
-def check_file(data: bytes) -> str:
-    if not 1 <= len(data) <= MAX_FILE_BYTES:
-        raise ApiError("VALIDATION", 422, "The file must be from 1 byte to 2 MB.")
+def check_file(data: bytes, max_bytes: int = MAX_FILE_BYTES) -> str:
+    if not 1 <= len(data) <= max_bytes:
+        raise ApiError("VALIDATION", 422, f"The file must be from 1 byte to {max_bytes // (1024 * 1024)} MB.")
     mime = detect_mime(data)
     if mime is None:
         raise ApiError("VALIDATION", 422, "Only PDF, JPG or PNG files.")

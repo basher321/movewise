@@ -14,6 +14,7 @@ import {
   uploadDocument,
   withdrawApplication,
   getMyApplication,
+  myLetterPdfUrl,
   type AppDocument,
   type AppModule,
   type AppStatus,
@@ -323,6 +324,29 @@ export default function ApplicationPage({ module, slug: id }: { module: AppModul
               <h3>Next step</h3>
               {next}
             </div>
+            {detail.letter ? (
+              <div className="card" style={{ marginTop: 18 }}>
+                <h3>Completion letter</h3>
+                {detail.letter.valid ? (
+                  <>
+                    <p style={{ margin: "0 0 12px" }}>
+                      Your completion letter {detail.letter.id} was issued on {formatDate(detail.letter.issued_at)}. Anyone can check it on our
+                      Verify certificate page.
+                    </p>
+                    <div className="cr" style={{ margin: 0 }}>
+                      <a className="btn" href={myLetterPdfUrl(module, app.id, true)}>
+                        Download letter (PDF)
+                      </a>
+                      <a className="btn ghost" href={myLetterPdfUrl(module, app.id)} target="_blank" rel="noopener">
+                        View
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ margin: 0, color: "var(--muted)" }}>Your case was reopened, so the letter is not valid at the moment.</p>
+                )}
+              </div>
+            ) : null}
             {answers.length ? (
               <div className="card" style={{ marginTop: 18 }}>
                 <h3>Your details</h3>

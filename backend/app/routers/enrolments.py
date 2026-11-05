@@ -15,7 +15,8 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, RowMapping
 
 from app.audit import Actor, write_audit
-from app.auth.deps import Applicant, client_ip, require_applicant, require_module, require_section
+from app.auth.deps import Applicant, client_ip, ensure_licensed, require_applicant, require_section
+from app.certificates import service as certificate_service
 from app.db.engine import get_conn
 from app.catalog import parse_uuid
 from app.errors import ApiError, error_response, parse_body
@@ -290,10 +291,14 @@ def approve_certificate(
 # ---------------------------------------------------------------- public certificate check
 
 
-@router.get("/certificates/{certificate_id}", dependencies=[Depends(require_module("course"))], response_model=None)
+@router.get("/certificates/{certificate_id}", response_model=None)
 def check_certificate(
     certificate_id: str, request: Request, conn: Connection = Depends(get_conn)
 ) -> dict[str, Any] | JSONResponse:
+    """A course certificate (CERT-) or, since B20, a completion letter (LTR-)."""
+    letter = certificate_id.strip().upper().startswith("LTR-")
+    if not letter:
+        ensure_licensed(conn, "course")
     ip = client_ip(request) or "unknown"
     recent = conn.execute(
         text(
@@ -305,6 +310,19 @@ def check_certificate(
     if int(recent) >= CHECKS_PER_MINUTE:
         raise ApiError("TOO_MANY_TRIES", 429, "Too many checks. Please wait a minute.")
     conn.execute(text("INSERT INTO rate_events (kind, ip) VALUES ('certificate_check', :ip)"), {"ip": ip})
+    if letter:
+        found = certificate_service.find(conn, certificate_id)
+        if found is None or not read_licence(conn).licensed(found.module):  # type: ignore[arg-type]
+            return error_response("NOT_FOUND", "Certificate not found.")
+        view = found.view
+        return {
+            "kind": "letter",
+            "valid": view["valid"],
+            "name": view["holder_name"],
+            "module": view["module"],
+            "title": view["subtitle"],
+            "issued_at": view["issued_at"],
+        }
     row = conn.execute(
         text(
             "SELECT p.name, c.title, c.duration, c.level, e.certificate_approved_at FROM enrolments e "

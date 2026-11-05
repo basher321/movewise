@@ -1,6 +1,7 @@
 """FastAPI application. Run (from backend/): uvicorn app.main:app"""
 
 import asyncio
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -20,6 +21,7 @@ from app.production import check_production
 from app.routers import admin_applications as admin_applications_router
 from app.routers import agents as agents_router
 from app.routers import partners as partners_router
+from app.routers import party_documents as party_documents_router
 from app.routers import admin_me as admin_me_router
 from app.routers import password_reset as password_reset_router
 from app.routers import admin_catalog as admin_catalog_router
@@ -30,6 +32,8 @@ from app.routers import catalog as catalog_router
 from app.routers import documents as documents_router
 from app.routers import enquiries as enquiries_router
 from app.routers import enrolments as enrolments_router
+from app.routers import certificates as certificates_router
+from app.routers import messages as messages_router
 from app.routers import finance as finance_router
 from app.routers import pay as pay_router
 from app.routers import health
@@ -41,14 +45,25 @@ from app.routers import team as team_router
 
 MAX_BODY_BYTES = 3 * 1024 * 1024
 TOO_LARGE_MESSAGE = "Request body is larger than 3 MB."
+# B21: an agent or partner document may be up to 10 MB; 1 MB more for the form around it.
+DOCUMENT_UPLOAD_PATH = re.compile(r"/api/admin/(agents|partners)/[^/]+/documents")
+DOCUMENT_UPLOAD_MAX_BODY = 11 * 1024 * 1024
+DOCUMENT_UPLOAD_TOO_LARGE = "The file must be 10 MB or smaller."
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # Payment gateway callbacks come from the gateway's own site (B07). They change nothing on their
 # own: every success is checked with the gateway by the server first.
 ORIGIN_EXEMPT_PREFIX = "/api/pay/"
 
 
+def body_limit(method: str, path: str) -> tuple[int, str]:
+    """The largest request body allowed: 3 MB, except an agent or partner document upload (B21)."""
+    if method == "POST" and DOCUMENT_UPLOAD_PATH.fullmatch(path):
+        return DOCUMENT_UPLOAD_MAX_BODY, DOCUMENT_UPLOAD_TOO_LARGE
+    return MAX_BODY_BYTES, TOO_LARGE_MESSAGE
+
+
 class BodySizeLimitMiddleware:
-    """Refuses request bodies over 3 MB."""
+    """Refuses request bodies over 3 MB (11 MB for an agent or partner document upload)."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -57,14 +72,15 @@ class BodySizeLimitMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        max_body, too_large = body_limit(scope["method"], scope["path"])
 
         length = Headers(scope=scope).get("content-length")
         if length is not None:
             if not length.isdigit():
                 await error_response("VALIDATION", "Invalid Content-Length header.")(scope, receive, send)
                 return
-            if int(length) > MAX_BODY_BYTES:
-                await error_response("VALIDATION", TOO_LARGE_MESSAGE)(scope, receive, send)
+            if int(length) > max_body:
+                await error_response("VALIDATION", too_large)(scope, receive, send)
                 return
 
         received = 0
@@ -74,8 +90,8 @@ class BodySizeLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > MAX_BODY_BYTES:
-                    raise HTTPException(status_code=422, detail=TOO_LARGE_MESSAGE)
+                if received > max_body:
+                    raise HTTPException(status_code=422, detail=too_large)
             return message
 
         await self.app(scope, limited_receive, send)
@@ -167,11 +183,14 @@ def create_app() -> FastAPI:
     app.include_router(admin_applications_router.router, prefix="/api")
     app.include_router(agents_router.router, prefix="/api")
     app.include_router(partners_router.router, prefix="/api")
+    app.include_router(party_documents_router.router, prefix="/api")
     app.include_router(documents_router.router, prefix="/api")
     app.include_router(pay_router.router, prefix="/api")
     app.include_router(finance_router.router, prefix="/api")
     app.include_router(notifications_router.router, prefix="/api")
     app.include_router(enrolments_router.router, prefix="/api")
+    app.include_router(certificates_router.router, prefix="/api")
+    app.include_router(messages_router.router, prefix="/api")
     app.include_router(enquiries_router.router, prefix="/api")
     app.include_router(audit_router.router, prefix="/api")
     return app

@@ -107,6 +107,15 @@ def _detail(conn: Connection, app: RowMapping) -> dict[str, Any]:
     view.update(documents_part(conn, [app], "applicant")[app["id"]])
     view["answers"] = app["answers"]
     view.update(_payment_part(conn, app["id"]))
+    # B20: the completion letter, once staff issued it (valid while the case is completed).
+    letter = conn.execute(
+        text("SELECT letter_id, issued_at FROM case_letters WHERE application_id = :id"), {"id": app["id"]}
+    ).one_or_none()
+    view["letter"] = (
+        None
+        if letter is None
+        else {"id": letter.letter_id, "issued_at": letter.issued_at.isoformat(), "valid": app["status"] == "completed"}
+    )
     return view
 
 

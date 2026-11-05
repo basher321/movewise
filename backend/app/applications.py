@@ -113,13 +113,18 @@ def add_event(
     )
 
 
-def notify_applicant(conn: Connection, app: RowMapping, event: str, subject: str, body: str) -> None:
-    """Email to the applicant, and WhatsApp too when they gave a phone number."""
+def notify_applicant(
+    conn: Connection, app: RowMapping, event: str, subject: str, body: str, channels: tuple[str, ...] = ("email", "whatsapp")
+) -> int:
+    """Email to the applicant, and WhatsApp too when they gave a phone number (B20: or only the
+    chosen channels). Returns how many messages were queued."""
     person = conn.execute(
         text("SELECT name, email, phone FROM applicant_accounts WHERE id = :id"), {"id": app["applicant_id"]}
     ).one()
     module: AppModule = app["module"]
-    queue_message(conn, person.name, person.email, person.phone or None, module, event, subject, body, app["id"])
+    return queue_message(
+        conn, person.name, person.email, person.phone or None, module, event, subject, body, app["id"], channels=channels
+    )
 
 
 def money_text(poisha: int) -> str:

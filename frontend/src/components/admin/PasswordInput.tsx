@@ -13,8 +13,8 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
-// A password box with a show / hide eye button inside it, used on the admin sign-in card and
-// in "My account".
+// A password box with a show / hide eye button inside it, used on the admin sign-in card,
+// in "My account", and on the applicant sign-in / sign-up dialog and "Change password".
 export default function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
   const [shown, setShown] = useState(false);
   return (

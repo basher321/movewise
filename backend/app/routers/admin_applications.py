@@ -108,6 +108,16 @@ def _rows_view(conn: Connection, rows: list[RowMapping]) -> list[dict[str, Any]]
             }
         )
     docs = documents_part(conn, rows, "admin")
+    # B20: the completion letter of each case, if issued.
+    letters = {
+        r.application_id: {"id": r.letter_id, "issued_at": r.issued_at.isoformat()}
+        for r in conn.execute(
+            text("SELECT application_id, letter_id, issued_at FROM case_letters WHERE application_id IN :ids").bindparams(
+                bindparam("ids", expanding=True)
+            ),
+            {"ids": ids},
+        )
+    }
     out = []
     for r in rows:
         module: AppModule = r["module"]
@@ -139,6 +149,8 @@ def _rows_view(conn: Connection, rows: list[RowMapping]) -> list[dict[str, Any]]
             view["agent"] = None
         else:
             view["agent"] = {"id": str(r["agent_id"]), "name": r["agent_name"], "active": r["agent_active"]}
+        letter = letters.get(r["id"])
+        view["letter"] = None if letter is None else {**letter, "valid": r["status"] == "completed"}
         view["history"] = events[r["id"]]
         view["emails"] = emails[r["id"]]
         view.update(docs[r["id"]])
@@ -416,6 +428,8 @@ class NoteIn(BaseModel):
 
 class EmailIn(BaseModel):
     to: Literal["applicant", "provider"]
+    # B20: for the applicant, email, WhatsApp or both (default both, as before).
+    channels: list[Literal["email", "whatsapp"]] = Field(default=["email", "whatsapp"], min_length=1, max_length=2)
     subject: str = Field(max_length=1000)
     body: str = Field(max_length=MAX_BODY)
 
@@ -446,7 +460,8 @@ async def send_case_email(
         raise _invalid(f"Subject must be at most {MAX_SUBJECT} characters.")
     module: AppModule = app["module"]
     if body.to == "applicant":
-        notify_applicant(conn, app, "case_email", subject, message)
+        if notify_applicant(conn, app, "case_email", subject, message, tuple(dict.fromkeys(body.channels))) == 0:
+            raise _invalid("This applicant has no email or phone number for the chosen channel.")
         who = "applicant"
     else:
         item = item_row(conn, app)
