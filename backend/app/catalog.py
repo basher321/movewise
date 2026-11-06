@@ -1,7 +1,7 @@
 """Catalog rules shared by the public, admin, match and agent endpoints (spec B04).
 
 Course groups and courses (Training), universities (Student Consultancy), vacancies
-(Job Processing) and visa programmes (Immigration Processing, B19). Items are never deleted:
+(Job Processing, and Remote Jobs when remote = true) and visa programmes (Immigration Processing, B19). Items are never deleted:
 they are hidden (published = false) or closed.
 All money is poisha (integers).
 """
@@ -19,12 +19,36 @@ from sqlalchemy.engine import Connection, RowMapping
 from app.errors import ApiError
 from app.licence import today_dhaka
 
-FeeModule = Literal["study", "job", "visa"]
+FeeModule = Literal["study", "job", "visa", "remote"]
 
 # Fixed lists (the reference forms). Index order matters: vacancies store the index.
 EDUCATION_LEVELS = ("Below SSC", "SSC / HSC", "Diploma", "Bachelor or higher")
 ENGLISH_LEVELS = ("Basic", "Good", "Fluent")
 BASE_STUDY_LEVELS = ("Foundation", "Diploma", "Bachelor", "Master", "PhD")
+# Remote Jobs agent form: common remote skills, always offered (the skills of open remote roles are
+# added after them). A remote role matches when its occupation is the chosen skill.
+REMOTE_SKILLS = (
+    "Software development",
+    "Web development",
+    "Mobile app development",
+    "UI / UX design",
+    "Graphic design",
+    "Video editing",
+    "Digital marketing",
+    "Search engine optimisation (SEO)",
+    "Social media management",
+    "Content writing",
+    "Translation",
+    "Data entry",
+    "Data analysis",
+    "Accounting & bookkeeping",
+    "Customer support",
+    "Virtual assistant",
+    "IT support",
+    "Online tutoring",
+    "Sales & lead generation",
+    "Project management",
+)
 ANY_COUNTRY = "Any country"
 
 # Visa programme types (B19), stored as text with a CHECK list in visa_programs.visa_type.
@@ -171,11 +195,11 @@ def lock_catalog(conn: Connection) -> None:
 def default_fees(conn: Connection) -> dict[FeeModule, int]:
     row = conn.execute(
         text(
-            "SELECT default_fee_study_poisha, default_fee_job_poisha, default_fee_visa_poisha "
-            "FROM settings WHERE singleton = 'settings'"
+            "SELECT default_fee_study_poisha, default_fee_job_poisha, default_fee_visa_poisha, "
+            "default_fee_remote_poisha FROM settings WHERE singleton = 'settings'"
         )
     ).one()
-    return {"study": int(row[0]), "job": int(row[1]), "visa": int(row[2])}
+    return {"study": int(row[0]), "job": int(row[1]), "visa": int(row[2]), "remote": int(row[3])}
 
 
 def effective_fee(override: int | None, default: int) -> int:
@@ -185,6 +209,35 @@ def effective_fee(override: int | None, default: int) -> int:
 def stored_override(value: int | None, default: int) -> int | None:
     """A fee equal to the module default is stored as no override."""
     return None if value is None or value == default else value
+
+
+# ---------------------------------------------------------------- success rate
+
+
+def success_columns(fk: str, ref: str) -> str:
+    """SQL columns success_completed and success_finished for the item `ref` (table or alias).
+    A finished journey is a case that reached Completed (success) or was Rejected. Withdrawn and
+    open cases are not finished, and Self Apply cases are not handled by the agency."""
+    base = f"FROM applications sr WHERE sr.{fk} = {ref}.id AND NOT sr.self_apply"
+    return (
+        f"(SELECT count(*) {base} AND sr.status = 'completed') AS success_completed, "
+        f"(SELECT count(*) {base} AND sr.status IN ('completed', 'rejected')) AS success_finished"
+    )
+
+
+UNI_SUCCESS = success_columns("university_id", "universities")
+VAC_SUCCESS = success_columns("vacancy_id", "vacancies")
+VISA_SUCCESS = success_columns("visa_program_id", "visa_programs")
+
+
+def success_rate(row: RowMapping) -> dict[str, int] | None:
+    """The success rate from the row's success columns; None while no journey has finished."""
+    finished = int(row.get("success_finished") or 0)
+    if finished == 0:
+        return None
+    completed = int(row.get("success_completed") or 0)
+    # Rounded half up, in whole numbers only.
+    return {"percent": (200 * completed + finished) // (2 * finished), "completed": completed, "finished": finished}
 
 
 # ---------------------------------------------------------------- views
@@ -256,6 +309,9 @@ def university_view(row: RowMapping, default_fee: int, admin: bool = False) -> d
         "work_rights": row["work_rights"],
         "conditions": row["conditions"],
         "fee_poisha": effective_fee(row["fee_override_poisha"], default_fee),
+        # Self Apply: its own fee, set by staff; None while Self Apply is not offered.
+        "self_apply_fee_poisha": row["self_apply_fee_poisha"],
+        "success_rate": success_rate(row),
     }
     if admin:
         # The official link and admissions email are for staff only, never the public page.
@@ -287,7 +343,9 @@ def vacancy_view(row: RowMapping, default_fee: int, admin: bool = False) -> dict
         "benefits": row["benefits"],
         "conditions": row["conditions"],
         "employer_verified": row["employer_verified"],
+        "remote": row["remote"],
         "fee_poisha": effective_fee(row["fee_override_poisha"], default_fee),
+        "success_rate": success_rate(row),
     }
     if admin:
         # Employer contact and licence number are for staff only.
@@ -317,6 +375,7 @@ def visa_program_view(row: RowMapping, default_fee: int, admin: bool = False) ->
         "required_documents": list(row["required_documents"]),
         "conditions": row["conditions"],
         "fee_poisha": effective_fee(row["fee_override_poisha"], default_fee),
+        "success_rate": success_rate(row),
     }
     if admin:
         # The official link and embassy email are for staff only.
@@ -336,10 +395,16 @@ COURSE_SELECT = (
     "FROM courses c JOIN course_groups g ON g.id = c.group_id"
 )
 PUBLIC_UNIVERSITIES = text(
-    "SELECT * FROM universities WHERE published ORDER BY name, id LIMIT :limit"
+    f"SELECT *, {UNI_SUCCESS} FROM universities WHERE published ORDER BY name, id LIMIT :limit"
 )
 PUBLIC_VACANCIES = text(
-    "SELECT * FROM vacancies WHERE NOT closed AND employer_verified ORDER BY created_at DESC, id LIMIT :limit"
+    f"SELECT *, {VAC_SUCCESS} FROM vacancies WHERE NOT remote AND NOT closed AND employer_verified "
+    "ORDER BY created_at DESC, id LIMIT :limit"
+)
+# Remote Jobs: remote roles are vacancies with remote = true, shown only in the Remote Jobs module.
+PUBLIC_REMOTE_JOBS = text(
+    f"SELECT *, {VAC_SUCCESS} FROM vacancies WHERE remote AND NOT closed AND employer_verified "
+    "ORDER BY created_at DESC, id LIMIT :limit"
 )
 
 
@@ -351,8 +416,12 @@ def public_vacancies(conn: Connection) -> list[RowMapping]:
     return list(conn.execute(PUBLIC_VACANCIES, {"limit": PUBLIC_LIMIT}).mappings())
 
 
+def public_remote_jobs(conn: Connection) -> list[RowMapping]:
+    return list(conn.execute(PUBLIC_REMOTE_JOBS, {"limit": PUBLIC_LIMIT}).mappings())
+
+
 PUBLIC_VISA_PROGRAMS = text(
-    "SELECT * FROM visa_programs WHERE published ORDER BY country, title, id LIMIT :limit"
+    f"SELECT *, {VISA_SUCCESS} FROM visa_programs WHERE published ORDER BY country, title, id LIMIT :limit"
 )
 
 

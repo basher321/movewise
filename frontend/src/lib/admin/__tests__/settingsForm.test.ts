@@ -26,7 +26,7 @@ function stored(changes: Partial<Settings> = {}): Settings {
     invoice_prefix: "INV",
     invoice_footer: "",
     vat_bin: "",
-    default_fee_poisha: { study: 100000, job: 150000, visa: 120000 },
+    default_fee_poisha: { study: 100000, job: 150000, visa: 120000, remote: 110000 },
     gateways: {
       sslcommerz: { enabled: false, sandbox: true, store_id: no, store_password: no },
       bkash: { enabled: false, sandbox: true, app_key: no, app_secret: no, username: no, password: no },

@@ -278,7 +278,7 @@ EXTRA_OUTSTANDING: list[Any] = []
 
 def outstanding_items(conn: Connection, applicant_id: Any = None) -> list[dict[str, Any]]:
     licence = read_licence(conn)
-    modules = [m for m in ("study", "job", "visa") if licence.licensed(m)]
+    modules = [m for m in ("study", "job", "visa", "remote") if licence.licensed(m)]
     default: dict[str, int] = dict(default_fees(conn))
     items = []
     for r in conn.execute(_OUTSTANDING_APPS, {"modules": modules}).mappings():

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Button from "@/components/Button";
 import Card from "@/components/Card";
+import LiveProgress from "@/components/LiveProgress";
 import PageShell from "@/components/PageShell";
 import PartnerStrip from "@/components/PartnerStrip";
 import DestinationChips from "@/components/agent/DestinationChips";
@@ -32,30 +33,7 @@ export default function ConsultancyPage() {
               <Button href="#s-agent">Find my universities</Button>
             </div>
           </div>
-          <div className="vis">
-            <h3>Application tracking</h3>
-            <div className="row ok">
-              <span>✓</span>
-              <div>
-                Documents verified<small>Checked by your advisor</small>
-              </div>
-            </div>
-            <div className="row ok">
-              <span>✓</span>
-              <div>
-                Application submitted<small>Fee paid online</small>
-              </div>
-            </div>
-            <div className="row">
-              <span>•</span>
-              <div>
-                University review<small>Every update in your profile</small>
-              </div>
-            </div>
-            <div className="bar">
-              <i style={{ width: "62%" }}></i>
-            </div>
-          </div>
+          <LiveProgress title="Application tracking" publicTitle="Universities open now" modules={["study"]} />
         </div>
       </div>
 

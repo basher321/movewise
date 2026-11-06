@@ -74,7 +74,7 @@ def test_key_from_make_key_unlocks_study_and_job_only(
     assert "key" not in response.json()
 
     view = module_client.get("/api/licence").json()
-    assert view["modules"] == {"course": False, "study": True, "job": True, "visa": False}
+    assert view["modules"] == {"course": False, "study": True, "job": True, "visa": False, "remote": False}
     assert view["holder"] == "Test Holder Ltd"
     assert view["active"] is True and "key" not in view
 
@@ -85,6 +85,30 @@ def test_key_from_make_key_unlocks_study_and_job_only(
         assert refused.json()["code"] == "MODULE_NOT_LICENSED"
         assert module_client.get("/api/_test/study").status_code == 200
         assert module_client.get("/api/_test/job").status_code == 200
+
+
+def test_key_with_remote_unlocks_remote_jobs(
+    module_client: TestClient, act_as: Callable[..., Any], licence_keys: LicenceKeys
+) -> None:
+    """A key made with make_key.py for all five modules opens Remote Jobs; an older key without
+    remote keeps it locked."""
+    act_as("super_admin")
+    old = _make_key_cli(licence_keys, "course,study,job,visa")
+    assert _apply(module_client, old).status_code == 200
+    assert module_client.get("/api/licence").json()["modules"]["remote"] is False
+    locked = module_client.get("/api/remote-jobs")
+    assert (locked.status_code, locked.json()["code"]) == (403, "MODULE_NOT_LICENSED")
+
+    key = _make_key_cli(licence_keys, "course,study,job,visa,remote")
+    assert _apply(module_client, key).status_code == 200
+    view = module_client.get("/api/licence").json()
+    assert view["modules"] == {"course": True, "study": True, "job": True, "visa": True, "remote": True}
+    assert view["active"] is True
+    assert module_client.get("/api/remote-jobs").status_code == 200
+    assert module_client.get("/api/admin/remote-jobs").status_code == 200
+    options = module_client.get("/api/catalog/options").json()
+    assert options["remote_countries"][:2] == ["Any country", "Afghanistan"] and "UK" in options["remote_countries"]
+    assert options["remote_occupations"][0] == "Software development"
 
 
 def test_full_view_shows_masked_key_to_super_admin_only(
@@ -146,7 +170,7 @@ def test_expired_stored_licence_locks_every_module(
         assert response.json()["code"] == "MODULE_NOT_LICENSED"
     view = module_client.get("/api/licence").json()
     assert view["active"] is False
-    assert view["modules"] == {"course": False, "study": False, "job": False, "visa": False}
+    assert view["modules"] == {"course": False, "study": False, "job": False, "visa": False, "remote": False}
 
 
 # ---------- b17 (licence part) and edge cases ----------

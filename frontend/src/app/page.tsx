@@ -50,6 +50,14 @@ export default function HomePage() {
                 <b>Find your visa →</b>
               </Card>
             </IfLicensed>
+            <IfLicensed module="remote">
+              <Card href="/remote-jobs" className="path" accent="#059669">
+                <div className="ico">💻</div>
+                <h3>Remote Jobs</h3>
+                <p>Verified remote roles you do from home. No visa or travel, with live tracking.</p>
+                <b>Find remote jobs →</b>
+              </Card>
+            </IfLicensed>
           </div>
         </div>
       </section>

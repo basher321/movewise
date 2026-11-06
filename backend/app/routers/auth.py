@@ -100,7 +100,7 @@ class ApplicantSignInIn(BaseModel):
 
 
 class SignOutIn(BaseModel):
-    target: Literal["admin", "course", "study", "job", "visa", "all"]
+    target: Literal["admin", "course", "study", "job", "visa", "remote", "all"]
 
 
 def _valid_email(raw: str) -> str:

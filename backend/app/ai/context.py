@@ -1,8 +1,9 @@
 """The database facts an advisor answer may use (spec B17).
 
-Only published universities, open verified vacancies and published visa programmes (the same rows
-the public pages show), the application fee, the stage names and the company contact details from
-Settings. Nothing about any applicant, no staff-only field (apply link, admissions, employer or
+Only published universities, open verified vacancies (on-site or, for Remote Jobs, remote) and
+published visa programmes (the same rows the public pages show), with their success rates, the
+application fee, the stage names, the required documents and the company contact details from
+Settings. Each advisor gets only its own module's rows. Nothing about any applicant, no staff-only field (apply link, admissions, employer or
 embassy email, employer licence, official link) and nothing from another module is ever included.
 """
 
@@ -20,13 +21,15 @@ from app.catalog import (
     default_fees,
     effective_fee,
     public_universities,
+    public_remote_jobs,
     public_vacancies,
     public_visa_programs,
 )
 from app.match import _agent_matches
-from app.stages import STAGES
+from app.catalog import success_rate
+from app.stages import DOCUMENT_TYPES, STAGES
 
-AgentModule = Literal["study", "job", "visa"]
+AgentModule = Literal["study", "job", "visa", "remote"]
 MAX_ROWS = 8
 MAX_TEXT = 600
 _WORD = re.compile(r"[^\W_]{3,}", re.UNICODE)
@@ -66,6 +69,8 @@ def _university_fact(row: Any, fee_default: int) -> dict[str, Any]:
         "work_rights": _short(row["work_rights"]),
         "conditions": _short(row["conditions"]),
         "our_application_fee": money_text(effective_fee(row["fee_override_poisha"], fee_default)),
+        "self_apply_fee": money_text(row["self_apply_fee_poisha"]) if row["self_apply_fee_poisha"] is not None else None,
+        "success_rate": success_rate(row),
     }
 
 
@@ -85,7 +90,9 @@ def _vacancy_fact(row: Any, fee_default: int) -> dict[str, Any]:
         "benefits": _short(row["benefits"]),
         "conditions": _short(row["conditions"]),
         "employer_verified": row["employer_verified"],
+        "work_type": "Remote (work from home, no visa or travel)" if row["remote"] else "On-site abroad",
         "our_application_fee": money_text(effective_fee(row["fee_override_poisha"], fee_default)),
+        "success_rate": success_rate(row),
     }
 
 
@@ -102,11 +109,17 @@ def _visa_fact(row: Any, fee_default: int) -> dict[str, Any]:
         "required_documents": [_short(x) for x in row["required_documents"]],
         "conditions": _short(row["conditions"]),
         "our_application_fee": money_text(effective_fee(row["fee_override_poisha"], fee_default)),
+        "success_rate": success_rate(row),
     }
 
 
-_SECTION = {"study": "Student Consultancy", "job": "Job Processing", "visa": "Immigration Processing"}
-_ITEMS_KEY = {"study": "universities", "job": "jobs", "visa": "visa_programmes"}
+_SECTION = {
+    "study": "Student Consultancy",
+    "job": "Job Processing",
+    "visa": "Immigration Processing",
+    "remote": "Remote Jobs (work from home, no visa or travel)",
+}
+_ITEMS_KEY = {"study": "universities", "job": "jobs", "visa": "visa_programmes", "remote": "remote_jobs"}
 
 
 def _rows(conn: Connection, module: AgentModule) -> list[Any]:
@@ -114,6 +127,8 @@ def _rows(conn: Connection, module: AgentModule) -> list[Any]:
         return public_universities(conn)
     if module == "visa":
         return public_visa_programs(conn)
+    if module == "remote":
+        return public_remote_jobs(conn)
     return public_vacancies(conn)
 
 
@@ -157,7 +172,7 @@ def build_facts(conn: Connection, module: AgentModule, question: str, inputs: di
     if not chosen:
         # No match for the form or the question: a short overview of what is offered.
         chosen = [r["id"] for r in rows]
-    make = {"study": _university_fact, "job": _vacancy_fact, "visa": _visa_fact}[module]
+    make = {"study": _university_fact, "job": _vacancy_fact, "visa": _visa_fact, "remote": _vacancy_fact}[module]
     items = []
     for rid in chosen[:MAX_ROWS]:
         fact = make(by_id[rid], fee_default)
@@ -170,8 +185,10 @@ def build_facts(conn: Connection, module: AgentModule, question: str, inputs: di
         "company": _company(conn),
         "default_application_fee": money_text(fee_default),
         "process_stages": list(STAGES[module]),
+        "required_documents": list(DOCUMENT_TYPES[module]),
         "countries_offered": sorted({str(r["country"]) for r in rows}),
         "total_published": len(rows),
         "items_match_the_question": specific,
+        "items_key": _ITEMS_KEY[module],
         _ITEMS_KEY[module]: items,
     }

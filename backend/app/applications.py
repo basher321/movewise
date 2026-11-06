@@ -42,6 +42,15 @@ ANSWER_TYPES: dict[AppModule, dict[str, str]] = {
         "passport_ready": "bool",
         "refused_before": "bool",
     },
+    # Remote Jobs: the job form without passport (no travel).
+    "remote": {
+        "occupation": "text",
+        "country": "text",
+        "experience": "number",
+        "education": "text",
+        "english": "text",
+        "salary_goal_usd": "number_or_null",
+    },
 }
 
 STATUS_LABELS = {
@@ -151,16 +160,25 @@ def item_title(module: AppModule, item: RowMapping) -> str:
 
 
 # Who a case email to the "provider" goes to, per module.
-PROVIDER_LABEL: dict[AppModule, str] = {"study": "university", "job": "employer", "visa": "embassy"}
+PROVIDER_LABEL: dict[AppModule, str] = {"study": "university", "job": "employer", "visa": "embassy", "remote": "employer"}
 
 
 def provider_email(module: AppModule, item: RowMapping) -> str:
-    key = {"study": "admissions_email", "job": "employer_email", "visa": "embassy_email"}[module]
+    key = {"study": "admissions_email", "job": "employer_email", "visa": "embassy_email", "remote": "employer_email"}[module]
     return str(item[key])
 
 
 def fee_now(conn: Connection, module: AppModule, item: RowMapping) -> int:
     return effective_fee(item["fee_override_poisha"], default_fees(conn)[module])
+
+
+def app_fee(conn: Connection, app: RowMapping, item: RowMapping) -> int | None:
+    """The fee this application pays: the self-apply fee for Self Apply (None while it is not
+    offered), otherwise the application fee."""
+    if app["self_apply"]:
+        fee = item["self_apply_fee_poisha"]
+        return int(fee) if fee is not None else None
+    return fee_now(conn, app["module"], item)
 
 
 def public_item(conn: Connection, module: AppModule, item: RowMapping) -> dict[str, Any]:
@@ -193,6 +211,7 @@ def base_view(app: RowMapping) -> dict[str, Any]:
         "stage_count": stage_count(module),
         "status": app["status"],
         "fee_paid": app["fee_paid"],
+        "self_apply": app["self_apply"],
         "deadline": app["deadline"].isoformat() if app["deadline"] else None,
         "created_at": app["created_at"].isoformat(),
         "updated_at": app["updated_at"].isoformat(),

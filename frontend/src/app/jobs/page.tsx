@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Button from "@/components/Button";
+import LiveProgress from "@/components/LiveProgress";
 import PageShell from "@/components/PageShell";
 import PartnerStrip from "@/components/PartnerStrip";
 import DestinationChips from "@/components/agent/DestinationChips";
@@ -24,30 +25,7 @@ export default function JobsPage() {
               </Button>
             </div>
           </div>
-          <div className="vis">
-            <h3>Job application</h3>
-            <div className="row ok">
-              <span>✓</span>
-              <div>
-                Profile reviewed<small>By your advisor</small>
-              </div>
-            </div>
-            <div className="row ok">
-              <span>✓</span>
-              <div>
-                Employer interview<small>Date and result in your profile</small>
-              </div>
-            </div>
-            <div className="row">
-              <span>•</span>
-              <div>
-                Work permit<small>Every update online</small>
-              </div>
-            </div>
-            <div className="bar">
-              <i style={{ width: "55%" }}></i>
-            </div>
-          </div>
+          <LiveProgress title="Job application" publicTitle="Jobs open now" modules={["job"]} />
         </div>
       </div>
 

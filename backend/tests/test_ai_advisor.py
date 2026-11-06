@@ -100,7 +100,8 @@ def test_b139_settings_show_key_status_only(client: TestClient, conn: Connection
     saved = save_ai(client, setup["body"], ai_block(("claude", "groq"), order=["groq", "claude", "openai", "gemini"]))
     assert saved.status_code == 200, saved.text
     ai = saved.json()["ai"]
-    assert ai["order"][0] == "groq"
+    # The failover order is fixed: a different order sent is stored as Claude, ChatGPT, Gemini, Groq.
+    assert ai["order"] == ["claude", "openai", "gemini", "groq"]
     assert all(ai["providers"][p]["key"] == {"saved": True} for p in KEYS)
     raw = json.dumps(saved.json())
     for key in KEYS.values():
@@ -150,7 +151,8 @@ def test_b141_failover_and_rule_based_fallback(client: TestClient, setup: dict[s
     assert ask(client, "study", "What does Maple Ridge cost?").json()["answer"] == "Answer from groq"
     fake.status["groq"] = 401
     rule = ask(client, "study", "What does Maple Ridge cost?").json()["answer"]
-    assert rule.startswith("Please fill in the form first")
+    # The built-in reply answers from the database: the university named in the question.
+    assert rule.startswith("Maple Ridge University costs about $20,000 per year.")
     fake.status = {}
     fake.reply["claude"] = "   "
     assert ask(client, "study", "Hello").json()["answer"] == "Answer from openai"  # empty reply moves on
@@ -299,3 +301,49 @@ def test_in_process_limit_without_log(client: TestClient, setup: dict[str, Any])
         assert advisor._reserve("198.51.100.7")
     assert not advisor._reserve("198.51.100.7")
     assert advisor._reserve("198.51.100.8")
+
+
+def test_fixed_order_even_with_an_old_saved_order(client: TestClient, conn: Connection, setup: dict[str, Any], fake: FakeProviders) -> None:
+    save_ai(client, setup["body"], ai_block(("claude", "openai", "gemini", "groq")))
+    # An order saved before the order was fixed is not used.
+    conn.execute(text("UPDATE settings SET ai = jsonb_set(ai, '{order}', '[\"groq\", \"gemini\", \"openai\", \"claude\"]')"))
+    assert ask(client, "study", "What does Maple Ridge cost?").json()["answer"] == "Answer from claude"
+    hosts = [c.url.host for c in fake.calls]
+    assert hosts == ["api.anthropic.com"]
+
+
+def test_answer_with_numbers_not_in_the_database_moves_on(client: TestClient, setup: dict[str, Any], fake: FakeProviders) -> None:
+    save_ai(client, setup["body"], ai_block(("claude", "openai", "gemini", "groq")))
+    # Claude invents a tuition, ChatGPT a phone number; Gemini copies the database tuition.
+    fake.reply["claude"] = "Maple Ridge costs about $99,999 per year."
+    fake.reply["openai"] = "Call us on 01999-123456."
+    fake.reply["gemini"] = "Maple Ridge University tuition is $20,000 per year."
+    assert ask(client, "study", "What does Maple Ridge cost?").json()["answer"] == fake.reply["gemini"]
+    # When every provider gives numbers that are not in the database, the built-in reply answers.
+    fake.reply["gemini"] = "It is 12% cheaper than others."
+    fake.reply["groq"] = "Around 25000 dollars."
+    rule = ask(client, "study", "What does Maple Ridge cost?").json()["answer"]
+    # The built-in reply answers from the database: the university named in the question.
+    assert rule.startswith("Maple Ridge University costs about $20,000 per year.")
+
+
+def test_grounding_rules() -> None:
+    from app.ai.grounding import is_grounded
+
+    facts = '{"tuition_usd_per_year": 20000, "min_gpa": 3.0, "deadline": "2026-11-30", "phone": "+880 1700-000000", "fee": "৳1,000"}'
+    assert is_grounded("Tuition is $20,000 a year and GPA 3 is needed.", facts)
+    assert is_grounded("The deadline is 30 November 2026. Our fee is ৳1,000.", facts)
+    assert is_grounded("Call 01700000000 or +880 1700-000000.", facts)
+    assert is_grounded("1. Tuition: $20,000\n2. GPA: 3.0", facts)
+    assert not is_grounded("Tuition is $21,000.", facts)
+    assert not is_grounded("You have a 95% chance.", facts)
+
+
+def test_prompt_keeps_each_advisor_to_its_purpose(client: TestClient, setup: dict[str, Any], fake: FakeProviders) -> None:
+    save_ai(client, setup["body"], ai_block(("claude",)))
+    ask(client, "study", "Tell me about Canada")
+    body = fake.bodies()[-1]
+    assert "I can only help with Student Consultancy questions." in body["system"]
+    assert "FACTS.universities" in body["system"] and "no outside knowledge" in body["system"]
+    facts = json.loads(body["messages"][0]["content"].split("FACTS (JSON):\n", 1)[1].split("\n\nVISITOR FORM INPUTS", 1)[0])
+    assert facts["required_documents"] and "success_rate" in facts["universities"][0]

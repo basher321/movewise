@@ -55,6 +55,7 @@ export const studyConfig: ModuleConfig = {
         ["Deadline", u.deadline_text || "–"],
         ["Scholarships", u.scholarships || "–"],
         ["Application fee", formatMoney(u.fee_poisha)],
+        ...(u.self_apply_fee_poisha !== null ? [["Self Apply fee", formatMoney(u.self_apply_fee_poisha)] as [string, string]] : []),
       ],
       conditions: [
         "Minimum GPA " + u.min_gpa + " on a 4.0 scale",
@@ -66,6 +67,8 @@ export const studyConfig: ModuleConfig = {
         u.conditions,
       ].filter(Boolean),
       fee_poisha: u.fee_poisha,
+      self_apply_fee_poisha: u.self_apply_fee_poisha,
+      success_rate: u.success_rate,
     };
   },
   describe: (item) => {

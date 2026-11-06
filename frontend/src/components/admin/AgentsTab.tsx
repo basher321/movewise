@@ -29,7 +29,7 @@ type View = "agents" | "commissions";
 
 // Licensed study/job/visa sections this person works in (all licensed ones for the super admin).
 export function agentSections(admin: AdminUser, licence: LicenceView | null): AgentSection[] {
-  return (["study", "job", "visa"] as const).filter(
+  return (["study", "job", "visa", "remote"] as const).filter(
     (m) => licence?.modules[m] && (admin.role === "super_admin" || (admin.role === "admin" && admin.sections.includes(m))),
   );
 }

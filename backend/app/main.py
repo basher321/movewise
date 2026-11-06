@@ -42,6 +42,7 @@ from app.routers import me as me_router
 from app.routers import notifications as notifications_router
 from app.routers import settings as settings_router
 from app.routers import team as team_router
+from app.routers import success as success_router
 
 MAX_BODY_BYTES = 3 * 1024 * 1024
 TOO_LARGE_MESSAGE = "Request body is larger than 3 MB."
@@ -178,6 +179,7 @@ def create_app() -> FastAPI:
     app.include_router(password_reset_router.router, prefix="/api")
     app.include_router(team_router.router, prefix="/api")
     app.include_router(catalog_router.router, prefix="/api")
+    app.include_router(success_router.router, prefix="/api")
     app.include_router(admin_catalog_router.router, prefix="/api")
     app.include_router(applications_router.router, prefix="/api")
     app.include_router(admin_applications_router.router, prefix="/api")

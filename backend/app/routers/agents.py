@@ -26,8 +26,8 @@ from app.routers.admin_applications import _load, _one_view
 
 router = APIRouter()
 
-AgentSection = Literal["study", "job", "visa"]
-SECTIONS: tuple[AgentSection, ...] = ("study", "job", "visa")
+AgentSection = Literal["study", "job", "visa", "remote"]
+SECTIONS: tuple[AgentSection, ...] = ("study", "job", "visa", "remote")
 COMMISSION_STATUSES = ("due", "paid", "cancelled")
 # Key of the transaction lock that makes agent changes on one case run one at a time.
 AGENT_LOCK = 3_000_016
@@ -206,7 +206,8 @@ def _agent_values(conn: Connection, body: AgentIn) -> dict[str, Any]:
     sections = list(dict.fromkeys(body.sections))
     if any(s not in SECTIONS for s in sections):
         raise _invalid(
-            "Sections can only be Student Consultancy (study), Job Processing (job) and Immigration Processing (visa)."
+            "Sections can only be Student Consultancy (study), Job Processing (job), Immigration Processing (visa) "
+            "and Remote Jobs (remote)."
         )
     if not sections:
         raise _invalid("Please choose at least one section for the agent.")
@@ -267,7 +268,7 @@ def list_agents(
     params: dict[str, Any] = {"visible": visible}
     if section:
         if section not in SECTIONS:
-            raise _invalid("Section must be study, job or visa.")
+            raise _invalid("Section must be study, job, visa or remote.")
         ensure_section(conn, actor, cast(Module, section))
         where.append(":section = ANY(a.sections)")
         params["section"] = section
@@ -408,7 +409,7 @@ def list_commissions(
     params: dict[str, Any] = {"visible": visible}
     if module:
         if module not in SECTIONS:
-            raise _invalid("Module must be study, job or visa.")
+            raise _invalid("Module must be study, job, visa or remote.")
         ensure_licensed(conn, cast(Module, module))
         if module not in visible:
             raise ApiError("FORBIDDEN", 403, f"You do not have access to the {MODULE_LABELS[cast(Module, module)]} section.")

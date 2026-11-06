@@ -78,6 +78,7 @@ export const jobConfig: ModuleConfig = {
         v.conditions,
       ].filter(Boolean),
       fee_poisha: v.fee_poisha,
+      success_rate: v.success_rate,
     };
   },
   describe: (item) => {

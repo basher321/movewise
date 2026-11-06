@@ -121,7 +121,7 @@ export function Panel({
           <ModuleLocked module="course" />
         ) : tab === "course" ? (
           <CoursesTab toast={toast} onSignedOut={onSignedOut} />
-        ) : tab === "study" || tab === "job" || tab === "visa" ? (
+        ) : tab === "study" || tab === "job" || tab === "visa" || tab === "remote" ? (
           <CasesTab key={tab} module={tab} admin={admin} toast={toast} onSignedOut={onSignedOut} />
         ) : tab === "agents" ? (
           <AgentsTab admin={admin} licence={licence} toast={toast} onSignedOut={onSignedOut} />

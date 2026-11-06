@@ -17,6 +17,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "study": "Student application fees",
     "job": "Job application fees",
     "visa": "Immigration application fees",
+    "remote": "Remote job application fees",
     "otherin": "Other income",
     "opening": "Opening balance",
     "salary": "Salaries",
@@ -28,7 +29,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "otherout": "Other expenses",
 }
 CATEGORIES: dict[Direction, tuple[str, ...]] = {
-    "in": ("course", "study", "job", "visa", "otherin", "opening"),
+    "in": ("course", "study", "job", "visa", "remote", "otherin", "opening"),
     "out": ("salary", "rent", "mkt", "partner", "tools", "refund", "otherout"),
 }
 _REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"

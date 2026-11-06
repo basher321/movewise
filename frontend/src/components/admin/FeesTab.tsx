@@ -7,6 +7,7 @@ import {
   listAdminUniversities,
   listAdminVacancies,
   listAdminVisaPrograms,
+  listAdminRemoteJobs,
   resetFees,
   saveFees,
   type AppModule,
@@ -29,7 +30,7 @@ type Props = { licence: LicenceView; toast: ShowToast; onSignedOut: () => void }
 
 // The Fees tab (showFees() in the reference): one fee box per job, university and visa programme.
 export default function FeesTab({ licence, toast, onSignedOut }: Props) {
-  const [defaults, setDefaults] = useState<{ study: number; job: number; visa: number } | null>(null);
+  const [defaults, setDefaults] = useState<{ study: number; job: number; visa: number; remote: number } | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
@@ -39,17 +40,19 @@ export default function FeesTab({ licence, toast, onSignedOut }: Props) {
   const load = useCallback(async () => {
     try {
       // Admin lists: hidden, closed and unverified items too, each with its effective fee.
-      const [fees, jobs, unis, visas] = await Promise.all([
+      const [fees, jobs, unis, visas, remotes] = await Promise.all([
         getFees(),
         licence.modules.job ? listAdminVacancies() : Promise.resolve([] as Vacancy[]),
         licence.modules.study ? listAdminUniversities() : Promise.resolve([] as University[]),
         licence.modules.visa ? listAdminVisaPrograms() : Promise.resolve([] as VisaProgram[]),
+        licence.modules.remote ? listAdminRemoteJobs() : Promise.resolve([] as Vacancy[]),
       ]);
       setDefaults(fees.defaults);
       const next: Row[] = [
         ...jobs.map((j) => ({ module: "job" as const, id: j.id, country: j.country, name: j.title, sub: j.employer + " · " + j.occupation, fee: j.fee_poisha })),
         ...unis.map((u) => ({ module: "study" as const, id: u.id, country: u.country, name: u.name, sub: u.city || u.levels.join(", "), fee: u.fee_poisha })),
         ...visas.map((v) => ({ module: "visa" as const, id: v.id, country: v.country, name: v.title, sub: v.visa_type_label, fee: v.fee_poisha })),
+        ...remotes.map((j) => ({ module: "remote" as const, id: j.id, country: j.country, name: j.title, sub: j.employer + " · " + j.occupation, fee: j.fee_poisha })),
       ];
       setRows(next);
       setValues(Object.fromEntries(next.map((r) => [keyOf(r), String(r.fee / 100)])));
@@ -148,13 +151,14 @@ export default function FeesTab({ licence, toast, onSignedOut }: Props) {
   return (
     <>
       <p style={{ marginBottom: 18, maxWidth: 640 }}>
-        Set the application fee for each job, university and visa programme. Applicants see this exact amount before paying. Fees that were already paid or
+        Set the application fee for each job, university, visa programme and remote job. Applicants see this exact amount before paying. Fees that were already paid or
         started do not change. The default fees are set in Settings.
       </p>
       <form ref={form} noValidate onSubmit={(e) => void save(e)}>
         {licence.modules.job ? card("job", "Jobs") : null}
         {licence.modules.study ? card("study", "Universities") : null}
         {licence.modules.visa ? card("visa", "Visa programmes") : null}
+        {licence.modules.remote ? card("remote", "Remote jobs") : null}
         <p className="err" role="alert" style={message?.ok ? { color: "#16A34A" } : undefined}>
           {message?.text}
         </p>

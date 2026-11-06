@@ -216,7 +216,7 @@ def my_letter_pdf(
     me: Applicant = Depends(current_applicant),
     conn: Connection = Depends(get_conn),
 ) -> Response:
-    if module not in ("study", "job", "visa"):
+    if module not in ("study", "job", "visa", "remote"):
         raise ApiError("NOT_FOUND", 404, "Not found.")
     row = service.case_row(conn, application_id=parse_id(app_id))
     if row is None or row["applicant_id"] != me.account["id"] or row["module"] != module or row["letter_id"] is None:

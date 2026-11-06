@@ -13,6 +13,7 @@ const SIGN_IN: Record<ResetKind, { href: string; label: string }> = {
   study: { href: "/consultancy", label: "Go to Student Consultancy and sign in" },
   job: { href: "/jobs", label: "Go to Job Processing and sign in" },
   visa: { href: "/immigration", label: "Go to Immigration Processing and sign in" },
+  remote: { href: "/remote-jobs", label: "Go to Remote Jobs and sign in" },
 };
 
 // /reset-password?token=... (B15): the page the "Forgot password?" email links to.

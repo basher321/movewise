@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Button from "@/components/Button";
+import LiveProgress from "@/components/LiveProgress";
 import PageShell from "@/components/PageShell";
 import PartnerStrip from "@/components/PartnerStrip";
 import CourseGroups from "@/components/course/CourseGroups";
@@ -22,24 +23,7 @@ export default function CoursesPage() {
               </Button>
             </div>
           </div>
-          <div className="vis">
-            <h3>My courses &amp; learning</h3>
-            <div className="row ok">
-              <span>✓</span>
-              <div>
-                Enrolment confirmed<small>Invoice in your profile</small>
-              </div>
-            </div>
-            <div className="row">
-              <span>▶</span>
-              <div>
-                Your course<small>Follow the syllabus step by step</small>
-              </div>
-            </div>
-            <div className="bar">
-              <i style={{ width: "58%" }}></i>
-            </div>
-          </div>
+          <LiveProgress title="My courses & learning" publicTitle="Our courses" modules={["course"]} />
         </div>
       </div>
 

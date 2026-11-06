@@ -33,12 +33,13 @@ export const PARTNER_MODULE_NAMES: Record<Module, string> = {
   study: "Student Consultancy",
   job: "Job Processing",
   visa: "Immigration Processing",
+  remote: "Remote Jobs",
 };
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
 // Licensed modules this person manages partners in (all licensed ones for the super admin).
 export function partnerModules(admin: AdminUser, licence: LicenceView | null): Module[] {
-  return (["course", "study", "job", "visa"] as const).filter(
+  return (["course", "study", "job", "visa", "remote"] as const).filter(
     (m) => licence?.modules[m] && (admin.role === "super_admin" || (admin.role === "admin" && admin.sections.includes(m))),
   );
 }

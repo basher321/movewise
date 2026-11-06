@@ -262,3 +262,47 @@ def test_upload_rate_limit(client: TestClient, conn: Connection, study: dict[str
     response = upload(client, study["id"])
     assert response.status_code == 429
     assert response.json()["code"] == "TOO_MANY_TRIES"
+
+
+# Submitting the documents together (linked to the processing stages).
+def _submit(client: TestClient, app_id: str) -> Any:
+    return client.post(f"/api/me/study/applications/{app_id}/documents/submit")
+
+
+def test_submit_documents_needs_every_required_type(client: TestClient, study: dict[str, Any]) -> None:
+    assert upload(client, study["id"]).status_code == 200
+    response = _submit(client, study["id"])
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION"
+    assert client.get(f"/api/me/study/applications/{study['id']}").json()["documents_submitted_at"] is None
+
+
+def test_submit_documents_moves_to_next_stage(client: TestClient, conn: Connection, study: dict[str, Any]) -> None:
+    for doc_type in study["required_types"]:
+        assert upload(client, study["id"], doc_type=doc_type).status_code == 200
+    before = audit_count(conn)
+    response = _submit(client, study["id"])
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["stage"] == 1 and body["stage_name"] == "Documents submitted"
+    assert body["documents_submitted_at"] is not None
+    texts = [e["text"] for e in body["history"]]
+    assert texts[:2] == ["Stage -> Documents submitted", "Documents submitted"]
+    assert audit_count(conn) == before + 1
+    again = _submit(client, study["id"])
+    assert again.status_code == 409 and again.json()["code"] == "CONFLICT"
+    # A new upload after the submission can be submitted again; the stage does not move again.
+    new_doc = upload(client, study["id"]).json()
+    # The test runs in one transaction, so now() does not move; a real upload is a later request.
+    conn.execute(
+        text("UPDATE documents SET uploaded_at = uploaded_at + interval '1 minute' WHERE id = :id"), {"id": new_doc["id"]}
+    )
+    resent = _submit(client, study["id"])
+    assert resent.status_code == 200, resent.text
+    assert resent.json()["stage"] == 1
+    assert resent.json()["history"][0]["text"] == "Documents resubmitted"
+
+
+def test_submit_documents_needs_sign_in(client: TestClient, study: dict[str, Any]) -> None:
+    client.cookies.clear()
+    assert _submit(client, study["id"]).status_code == 401

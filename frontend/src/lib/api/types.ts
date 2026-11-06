@@ -3,11 +3,11 @@
 
 // ---------- Fixed value lists ----------
 
-export const MODULES = ["course", "study", "job", "visa"] as const;
+export const MODULES = ["course", "study", "job", "visa", "remote"] as const;
 export type Module = (typeof MODULES)[number];
 
 // Modules that have applications (courses use enrolments instead).
-export const APP_MODULES = ["study", "job", "visa"] as const;
+export const APP_MODULES = ["study", "job", "visa", "remote"] as const;
 export type AppModule = (typeof APP_MODULES)[number];
 
 export const MODULE_NAMES: Record<Module, string> = {
@@ -15,6 +15,7 @@ export const MODULE_NAMES: Record<Module, string> = {
   study: "Student Consultancy",
   job: "Job Processing",
   visa: "Immigration Processing",
+  remote: "Remote Jobs",
 };
 
 export const ADMIN_ROLES = ["super_admin", "admin", "finance"] as const;
@@ -62,9 +63,21 @@ export const VISA_STAGES = [
 ] as const;
 export type VisaStage = (typeof VISA_STAGES)[number];
 
+// Remote Jobs (6 stages, index 0-5), same as the backend: no visa, medical or flight steps.
+export const REMOTE_STAGES = [
+  "Application started",
+  "Profile screening",
+  "Skills test / interview",
+  "Job offer & contract",
+  "Onboarding",
+  "Started work ✓",
+] as const;
+export type RemoteStage = (typeof REMOTE_STAGES)[number];
+
 // The stage names of a module (ST and JT in the reference). Use these instead of a fixed number.
 export function stagesOf(module: AppModule): readonly string[] {
   if (module === "visa") return VISA_STAGES;
+  if (module === "remote") return REMOTE_STAGES;
   return module === "study" ? STUDY_STAGES : JOB_STAGES;
 }
 
@@ -100,6 +113,7 @@ export const DOCUMENT_TYPES: Record<AppModule, readonly string[]> = {
     "Previous visas and travel history",
     "Other supporting documents",
   ],
+  remote: ["Updated CV", "Education and experience certificates", "National ID or passport", "Portfolio or work samples"],
 };
 
 // B19: visa programme types (CHECK list in visa_programs.visa_type).
@@ -195,6 +209,37 @@ export type LedgerDirection = (typeof LEDGER_DIRECTIONS)[number];
 export const EDUCATION_LEVELS = ["Below SSC", "SSC / HSC", "Diploma", "Bachelor or higher"] as const;
 export const ENGLISH_LEVELS = ["Basic", "Good", "Fluent"] as const;
 export const PASSPORT_OPTIONS = ["Valid 18+ months", "Valid under 18 months", "No passport yet"] as const;
+// Remote Jobs: common remote skills, the same list as the backend (catalog.REMOTE_SKILLS).
+export const REMOTE_SKILLS = [
+  "Software development",
+  "Web development",
+  "Mobile app development",
+  "UI / UX design",
+  "Graphic design",
+  "Video editing",
+  "Digital marketing",
+  "Search engine optimisation (SEO)",
+  "Social media management",
+  "Content writing",
+  "Translation",
+  "Data entry",
+  "Data analysis",
+  "Accounting & bookkeeping",
+  "Customer support",
+  "Virtual assistant",
+  "IT support",
+  "Online tutoring",
+  "Sales & lead generation",
+  "Project management",
+] as const;
+
+// Finished journeys of a university, vacancy or visa programme: Completed (success) or Rejected.
+// Withdrawn, open and Self Apply cases are not counted. null while none has finished.
+export interface SuccessRate {
+  percent: number;
+  completed: number;
+  finished: number;
+}
 
 export const ENROLMENT_STATUSES = ["awaiting_payment", "active", "completed", "cancelled"] as const;
 export type EnrolmentStatus = (typeof ENROLMENT_STATUSES)[number];
@@ -251,7 +296,7 @@ export interface PublicSettings {
   invoice_prefix: string;
   invoice_footer: string;
   vat_bin: string;
-  default_fee_poisha: { study: number; job: number; visa: number };
+  default_fee_poisha: { study: number; job: number; visa: number; remote: number };
   gateways: { sslcommerz: PublicGateway; bkash: PublicGateway; nagad: PublicGateway; manual: ManualGateway };
   mail: { sender_name: string; sender_email: string };
   whatsapp: { number: string };
@@ -469,6 +514,9 @@ export interface University {
   work_rights: string;
   conditions: string;
   fee_poisha: number;
+  // Self Apply: its own fee set by staff; null while Self Apply is not offered.
+  self_apply_fee_poisha: number | null;
+  success_rate: SuccessRate | null;
   // Admin lists only (never on the public site).
   apply_link?: string;
   admissions_email?: string;
@@ -495,6 +543,7 @@ export interface UniversityInput {
   apply_link: string;
   admissions_email: string;
   fee_override_poisha: number | null;
+  self_apply_fee_poisha: number | null;
   published: boolean;
 }
 
@@ -515,7 +564,10 @@ export interface Vacancy {
   benefits: string;
   conditions: string;
   employer_verified: boolean;
+  // A Remote Jobs role (work from home); false for Job Processing vacancies.
+  remote: boolean;
   fee_poisha: number;
+  success_rate: SuccessRate | null;
   // Admin lists only.
   employer_licence?: string;
   employer_email?: string;
@@ -562,6 +614,7 @@ export interface VisaProgram {
   required_documents: string[];
   conditions: string;
   fee_poisha: number;
+  success_rate: SuccessRate | null;
   // Admin lists only (never on the public site).
   official_link?: string;
   embassy_email?: string;
@@ -597,6 +650,9 @@ export interface CatalogOptions {
   english_levels: string[];
   visa_countries: string[];
   visa_types: string[];
+  // Remote Jobs: skills of open remote roles and the employers' countries.
+  remote_occupations: string[];
+  remote_countries: string[];
 }
 
 export interface FeeItem {
@@ -608,10 +664,11 @@ export interface FeeItem {
 }
 
 export interface FeesView {
-  defaults: { study: number; job: number; visa: number };
+  defaults: { study: number; job: number; visa: number; remote: number };
   universities: FeeItem[];
   vacancies: FeeItem[];
   visa_programs: FeeItem[];
+  remote_jobs: FeeItem[];
 }
 
 // id -> fee in poisha, or null for the default.
@@ -633,6 +690,41 @@ export interface MatchJobInput {
   english: string;
   passport_ready: boolean;
   salary_goal_usd: number | null;
+}
+
+// Remote Jobs: the job form without passport (the work is done from home).
+export interface MatchRemoteInput {
+  occupation: string;
+  country: string;
+  experience: number;
+  education: string;
+  english: string;
+  salary_goal_usd: number | null;
+}
+
+// Success Stories (public): made automatically from cases that reached Completed.
+export interface SuccessSummary {
+  module: AppModule;
+  module_label: string;
+  completed: number;
+  finished: number;
+  percent: number | null;
+}
+
+export interface SuccessStory {
+  id: string;
+  name: string; // short name only, e.g. "Rahim K."
+  module: AppModule;
+  module_label: string;
+  title: string;
+  detail: string;
+  country: string;
+  completed_at: string;
+}
+
+export interface SuccessStories {
+  summary: SuccessSummary[];
+  stories: SuccessStory[];
 }
 
 export interface MatchVisaInput {
@@ -667,6 +759,8 @@ export interface AppBase {
   stage_count: number;
   status: AppStatus;
   fee_paid: boolean;
+  // Self Apply (universities): pays the self-apply fee for the official link; not processed by staff.
+  self_apply: boolean;
   deadline: string | null;
   created_at: string;
   updated_at: string;
@@ -728,6 +822,8 @@ export interface MyApplication extends AppBase, DocumentsPart, Partial<Interview
   // Study only, after the fee is paid.
   apply_link?: string;
   answers: Answers;
+  // When the applicant last submitted the required documents together; null until then.
+  documents_submitted_at: string | null;
   // The latest fee payment and its invoice.
   payment: FeePayment | null;
   invoice: Invoice | null;
@@ -954,6 +1050,7 @@ export const LEDGER_CATEGORIES: Record<LedgerDirection, readonly { key: string; 
     { key: "study", label: "Student application fees" },
     { key: "job", label: "Job application fees" },
     { key: "visa", label: "Immigration application fees" },
+    { key: "remote", label: "Remote job application fees" },
     { key: "otherin", label: "Other income" },
     { key: "opening", label: "Opening balance" },
   ],
@@ -1132,7 +1229,7 @@ export interface AuditPage {
 
 // ---------- partner agents and commissions (B16) ----------
 
-export type AgentSection = "study" | "job" | "visa";
+export type AgentSection = "study" | "job" | "visa" | "remote";
 export const COMMISSION_TYPES = ["fixed", "percent"] as const;
 export type CommissionType = (typeof COMMISSION_TYPES)[number];
 export const COMMISSION_STATUSES = ["due", "paid", "cancelled"] as const;

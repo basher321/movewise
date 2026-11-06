@@ -7,6 +7,7 @@ const INTERESTS: { value: Module; label: string }[] = [
   { value: "study", label: "Study abroad" },
   { value: "job", label: "Job abroad" },
   { value: "visa", label: "Visa / immigration" },
+  { value: "remote", label: "Remote jobs" },
   { value: "course", label: "Course enrolment" },
 ];
 

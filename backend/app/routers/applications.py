@@ -7,17 +7,18 @@ import json
 from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field, StrictBool
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, RowMapping
 
 from app.applications import (
     APPLY_LOCK,
     add_event,
+    app_fee,
     base_view,
     check_answers,
     event_view,
-    fee_now,
     interview_fields,
     item_row,
     item_title,
@@ -34,13 +35,14 @@ from app.auth.deps import Applicant, current_applicant
 from app.db.engine import get_conn
 from app.documents import documents_part
 from app.errors import ApiError, parse_body
-from app.stages import AppModule
+from app.stages import AppModule, stage_count, stage_name
 
 router = APIRouter()
 
 _PUBLIC_ITEM = {
     "study": text("SELECT * FROM universities WHERE slug = :slug AND published"),
-    "job": text("SELECT * FROM vacancies WHERE slug = :slug AND NOT closed AND employer_verified"),
+    "job": text("SELECT * FROM vacancies WHERE slug = :slug AND NOT remote AND NOT closed AND employer_verified"),
+    "remote": text("SELECT * FROM vacancies WHERE slug = :slug AND remote AND NOT closed AND employer_verified"),
     "visa": text("SELECT * FROM visa_programs WHERE slug = :slug AND published"),
 }
 _OPEN_FOR_ITEM = text(
@@ -48,8 +50,8 @@ _OPEN_FOR_ITEM = text(
     "AND COALESCE(university_id, vacancy_id, visa_program_id) = :item"
 )
 _INSERT_APP = text(
-    "INSERT INTO applications (ref, module, applicant_id, university_id, vacancy_id, visa_program_id, answers) "
-    "VALUES (:ref, :module, :applicant, :university, :vacancy, :visa, CAST(:answers AS jsonb)) RETURNING *"
+    "INSERT INTO applications (ref, module, applicant_id, university_id, vacancy_id, visa_program_id, answers, self_apply) "
+    "VALUES (:ref, :module, :applicant, :university, :vacancy, :visa, CAST(:answers AS jsonb), :self_apply) RETURNING *"
 )
 _MY_APPS = text(
     "SELECT a.*, COALESCE(u.name, v.title, vp.title) AS item_title, "
@@ -68,15 +70,27 @@ _PUBLIC_EVENTS = text(
     "SELECT * FROM app_events WHERE application_id = :id AND public ORDER BY at DESC, id DESC"
 )
 _ADVISOR = text("SELECT name, active FROM admin_users WHERE id = :id")
+# The applicant submits the required documents together; the latest submission is an event.
+DOCS_SUBMITTED = "Documents submitted"
+DOCS_RESUBMITTED = "Documents resubmitted"
+_DOCS_SUBMITTED_AT = text(
+    "SELECT max(at) FROM app_events WHERE application_id = :id AND by_kind = 'applicant' "
+    "AND text IN ('Documents submitted', 'Documents resubmitted')"
+)
+_NEWEST_UPLOAD = text(
+    "SELECT max(uploaded_at) FROM documents WHERE application_id = :id AND status <> 'replaced'"
+)
 
 
 class ApplyIn(BaseModel):
     item_slug: str = Field(max_length=200)
     answers: dict[str, Any] = Field(default_factory=dict)
+    # Self Apply (universities only): pay the self-apply fee, then get the official link.
+    self_apply: StrictBool = False
 
 
 def _app_module(module: str) -> AppModule:
-    if module not in ("study", "job", "visa"):
+    if module not in ("study", "job", "visa", "remote"):
         raise ApiError("NOT_FOUND", 404, "Not found.")
     return cast(AppModule, module)
 
@@ -99,13 +113,15 @@ def _detail(conn: Connection, app: RowMapping) -> dict[str, Any]:
     view["history"] = [event_view(e) for e in conn.execute(_PUBLIC_EVENTS, {"id": app["id"]}).mappings()]
     advisor = conn.execute(_ADVISOR, {"id": app["assigned_to"]}).one_or_none() if app["assigned_to"] else None
     view["advisor_name"] = advisor.name if advisor and advisor.active else None
-    view["fee_poisha"] = None if app["fee_paid"] else fee_now(conn, module, item)
+    view["fee_poisha"] = None if app["fee_paid"] else app_fee(conn, app, item)
     if module == "study" and app["fee_paid"]:
         view["apply_link"] = item["apply_link"]
-    if module in ("job", "visa"):  # visa: the biometrics / interview appointment
+    if module in ("job", "visa", "remote"):  # visa: the biometrics / interview appointment
         view.update(interview_fields(app))
     view.update(documents_part(conn, [app], "applicant")[app["id"]])
     view["answers"] = app["answers"]
+    submitted = conn.execute(_DOCS_SUBMITTED_AT, {"id": app["id"]}).scalar_one_or_none()
+    view["documents_submitted_at"] = submitted.isoformat() if submitted else None
     view.update(_payment_part(conn, app["id"]))
     # B20: the completion letter, once staff issued it (valid while the case is completed).
     letter = conn.execute(
@@ -166,11 +182,19 @@ async def apply(
 ) -> dict[str, Any]:
     app_module = _app_module(module)
     body = parse_body(ApplyIn, await request.body())
+    # The advisory lock below can wait for a parallel request of the same applicant. Waiting in a
+    # worker thread keeps the event loop free, so that other request can finish and release it.
+    return await run_in_threadpool(_start_application, conn, me, app_module, body)
+
+
+def _start_application(conn: Connection, me: Applicant, app_module: AppModule, body: ApplyIn) -> dict[str, Any]:
     answers = check_answers(app_module, body.answers)
     item = conn.execute(_PUBLIC_ITEM[app_module], {"slug": body.item_slug.strip()}).mappings().one_or_none()
     if item is None:
-        what = {"study": "University", "job": "Vacancy", "visa": "Visa programme"}[app_module]
+        what = {"study": "University", "job": "Vacancy", "visa": "Visa programme", "remote": "Remote job"}[app_module]
         raise ApiError("NOT_FOUND", 404, f"{what} not found.")
+    if body.self_apply and (app_module != "study" or item["self_apply_fee_poisha"] is None):
+        raise ApiError("CONFLICT", 409, "Self Apply is not available for this university yet.")
 
     applicant_id = me.account["id"]
     conn.execute(text("SELECT pg_advisory_xact_lock(:a, hashtext(:b))"), {"a": APPLY_LOCK, "b": str(applicant_id)})
@@ -185,23 +209,29 @@ async def apply(
             "module": app_module,
             "applicant": applicant_id,
             "university": item["id"] if app_module == "study" else None,
-            "vacancy": item["id"] if app_module == "job" else None,
+            "vacancy": item["id"] if app_module in ("job", "remote") else None,
             "visa": item["id"] if app_module == "visa" else None,
             "answers": json.dumps(answers),
+            "self_apply": body.self_apply,
         },
     ).mappings().one()
-    add_event(conn, app["id"], me.actor, "Application started")
+    add_event(conn, app["id"], me.actor, "Self Apply started" if body.self_apply else "Application started")
     title = item_title(app_module, item)
-    fee = fee_now(conn, app_module, item)
-    notify_applicant(
-        conn,
-        app,
-        "application_received",
-        f"Application received - {app['ref']}",
-        f"Thank you for applying to {title}. Your reference is {app['ref']}. "
-        f"The application fee is {money_text(fee)}. You can pay it and follow every step in your profile.",
+    fee = app_fee(conn, app, item) or 0
+    if body.self_apply:
+        message = (
+            f"Thank you for choosing Self Apply for {title}. Your reference is {app['ref']}. "
+            f"Pay the self-apply fee of {money_text(fee)} in your profile to get the official application link."
+        )
+    else:
+        message = (
+            f"Thank you for applying to {title}. Your reference is {app['ref']}. "
+            f"The application fee is {money_text(fee)}. You can pay it and follow every step in your profile."
+        )
+    notify_applicant(conn, app, "application_received", f"Application received - {app['ref']}", message)
+    write_audit(
+        conn, me.actor, "application.self_apply_started" if body.self_apply else "application.started", f"{app['ref']} · {title}"
     )
-    write_audit(conn, me.actor, "application.started", f"{app['ref']} · {title}")
     return _detail(conn, app)
 
 
@@ -228,6 +258,38 @@ def my_application(
     module: str, app_id: str, me: Applicant = Depends(current_applicant), conn: Connection = Depends(get_conn)
 ) -> dict[str, Any]:
     return _detail(conn, _own(conn, me, _app_module(module), app_id))
+
+
+@router.post("/me/{module}/applications/{app_id}/documents/submit")
+def submit_documents(
+    module: str, app_id: str, me: Applicant = Depends(current_applicant), conn: Connection = Depends(get_conn)
+) -> dict[str, Any]:
+    """Send every required document to review in one step. While the case is still at its first
+    stage it moves on to the next processing stage."""
+    app_module = _app_module(module)
+    app = _own(conn, me, app_module, app_id, lock=True)
+    if app["self_apply"]:
+        raise ApiError("CONFLICT", 409, "A Self Apply has no documents to submit.")
+    if app["status"] != "active":
+        raise ApiError("CONFLICT", 409, "Documents can only be submitted while the application is active.")
+    missing = documents_part(conn, [app], "applicant")[app["id"]]["missing_count"]
+    if missing:
+        raise ApiError(
+            "VALIDATION",
+            422,
+            f"Please upload every required document first ({missing} still needed).",
+        )
+    submitted = conn.execute(_DOCS_SUBMITTED_AT, {"id": app["id"]}).scalar_one_or_none()
+    newest = conn.execute(_NEWEST_UPLOAD, {"id": app["id"]}).scalar_one_or_none()
+    if submitted is not None and (newest is None or newest <= submitted):
+        raise ApiError("CONFLICT", 409, "Your documents are already submitted.")
+
+    add_event(conn, app["id"], me.actor, DOCS_RESUBMITTED if submitted else DOCS_SUBMITTED)
+    if app["stage"] == 0 and stage_count(app_module) > 1:
+        conn.execute(text("UPDATE applications SET stage = 1 WHERE id = :id"), {"id": app["id"]})
+        add_event(conn, app["id"], me.actor, f"Stage -> {stage_name(app_module, 1)}")
+    write_audit(conn, me.actor, "documents.submitted", app["ref"])
+    return _detail(conn, _own(conn, me, app_module, app_id))
 
 
 @router.post("/me/{module}/applications/{app_id}/withdraw")

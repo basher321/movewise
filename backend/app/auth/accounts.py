@@ -20,7 +20,7 @@ APPLICANT_COLUMNS = (
     "id", "public_id", "module", "username", "name", "email", "phone", "country", "education",
     "email_verified", "created_at",
 )
-ID_PREFIX: dict[Module, str] = {"course": "CRS", "study": "STU", "job": "JOB", "visa": "VIS"}
+ID_PREFIX: dict[Module, str] = {"course": "CRS", "study": "STU", "job": "JOB", "visa": "VIS", "remote": "RMT"}
 # A-Z and 2-9 without O, I, 0 and 1.
 ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 ID_ATTEMPTS = 5

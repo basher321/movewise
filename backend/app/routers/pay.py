@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, RowMapping
 
-from app.applications import add_event, fee_now, item_row, item_title, parse_id
+from app.applications import add_event, app_fee, item_row, item_title, parse_id
 from app.audit import write_audit
 from app.auth.deps import Applicant, current_applicant, current_applicant_row
 from app.auth.inputs import normalize_phone
@@ -240,8 +240,12 @@ async def pay_application(
     if app["status"] not in ("active", "on_hold"):
         raise ApiError("CONFLICT", 409, "Only an active or on-hold application can be paid for.")
     item = item_row(conn, app)
-    purpose = f"Application fee - {item_title(app_module, item)} ({app['ref']})"
-    return start_payment(conn, me, app_module, "application", app["id"], purpose, fee_now(conn, app_module, item), body)
+    fee = app_fee(conn, app, item)
+    if fee is None:
+        raise ApiError("CONFLICT", 409, "Self Apply is not available for this university now.")
+    kind = "Self-apply fee" if app["self_apply"] else "Application fee"
+    purpose = f"{kind} - {item_title(app_module, item)} ({app['ref']})"
+    return start_payment(conn, me, app_module, "application", app["id"], purpose, fee, body)
 
 
 # ---------------------------------------------------------------- payment result

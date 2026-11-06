@@ -124,7 +124,7 @@ export function toForm(s: Settings): SettingsInput {
     },
     // B17: keys start empty (an empty key keeps the saved one).
     ai: {
-      order: [...s.ai.order],
+      order: [...AI_PROVIDERS],
       providers: Object.fromEntries(
         AI_PROVIDERS.map((p) => [p, { enabled: s.ai.providers[p].enabled, model: s.ai.providers[p].model, key: "" }]),
       ) as NonNullable<SettingsInput["ai"]>["providers"],
@@ -159,7 +159,7 @@ export function validateSettings(form: SettingsInput, stored: Settings): string 
   if (form.email.trim() && !EMAIL_RE.test(form.email.trim())) return "Please enter a valid email.";
   if (form.mail.sender_email.trim() && !EMAIL_RE.test(form.mail.sender_email.trim())) return "Please enter a valid sender email address.";
   const fees = form.default_fee_poisha;
-  if ([fees.study, fees.job, fees.visa].some((f) => !Number.isInteger(f) || f <= 0)) {
+  if ([fees.study, fees.job, fees.visa, fees.remote].some((f) => !Number.isInteger(f) || f <= 0)) {
     return "Default fees must be whole taka above 0.";
   }
   if (!Number.isInteger(form.mail.smtp_port) || form.mail.smtp_port < 1 || form.mail.smtp_port > 65535) return "SMTP port must be from 1 to 65535.";

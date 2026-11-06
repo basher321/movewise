@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
@@ -10,6 +10,7 @@ from sqlalchemy.engine import Connection
 from app.secrets_store import read_secret
 
 Provider = Literal["claude", "openai", "gemini", "groq"]
+# The failover order is fixed: Claude, then ChatGPT, then Gemini, then Groq.
 PROVIDERS: tuple[Provider, ...] = ("claude", "openai", "gemini", "groq")
 PROVIDER_LABELS: dict[Provider, str] = {"claude": "Claude", "openai": "ChatGPT", "gemini": "Gemini", "groq": "Groq"}
 DEFAULT_MODELS: dict[Provider, str] = {"claude": "claude-opus-5-5", "openai": "", "gemini": "", "groq": ""}
@@ -40,9 +41,7 @@ def normalise(raw: Any) -> dict[str, Any]:
     out = default_ai()
     if not isinstance(raw, dict):
         return out
-    order = raw.get("order")
-    if isinstance(order, list) and len(order) == len(PROVIDERS) and set(order) == set(PROVIDERS):
-        out["order"] = list(order)
+    # The order is always PROVIDERS (a different order saved before is not used).
     providers = raw.get("providers")
     if isinstance(providers, dict):
         for p in PROVIDERS:
@@ -61,11 +60,10 @@ def read_ai(conn: Connection) -> dict[str, Any]:
 
 
 def ready_providers(conn: Connection) -> list[ReadyProvider]:
-    """Enabled providers with a model and a readable key, in the saved order."""
+    """Enabled providers with a model and a readable key, in the fixed order of PROVIDERS."""
     ai = read_ai(conn)
     ready = []
-    for name in ai["order"]:
-        p = cast(Provider, name)
+    for p in PROVIDERS:
         item = ai["providers"][p]
         if not item["enabled"] or not item["model"]:
             continue

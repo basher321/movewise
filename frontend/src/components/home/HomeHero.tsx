@@ -2,15 +2,18 @@
 
 import Button from "@/components/Button";
 import IfLicensed from "@/components/IfLicensed";
+import LiveProgress, { ALL_MODULES } from "@/components/LiveProgress";
 import { useSettings } from "@/components/SettingsProvider";
 import Tag from "@/components/Tag";
 
-// Home hero from Settings (applyBrand() in the reference). With no home picture, the tracking card is shown.
+// Home hero from Settings (applyBrand() in the reference). The Settings picture, or the signed-in applicant's real progress.
 export default function HomeHero() {
   const { settings, licence } = useSettings();
   const picture = settings?.hero_url ?? "";
-  // An empty setting falls back to the reference default text (SET0), plus Visas when Immigration (B19) is licensed.
-  const fallbackTagline = "Courses · Study abroad · Jobs abroad" + (licence?.modules.visa ? " · Visas" : "");
+  // An empty setting falls back to the reference default text (SET0), plus Visas when Immigration (B19) and
+  // Remote jobs when Remote Jobs is licensed.
+  const fallbackTagline =
+    "Courses · Study abroad · Jobs abroad" + (licence?.modules.visa ? " · Visas" : "") + (licence?.modules.remote ? " · Remote jobs" : "");
   const tagline = settings ? settings.tagline || fallbackTagline : "";
   const title = settings ? settings.hero_title || "Build skills here. Build your future anywhere." : "";
   const text = settings
@@ -45,30 +48,7 @@ export default function HomeHero() {
               ))}
           </div>
         </div>
-        <div className={picture ? "vis img" : "vis"} style={picture ? { backgroundImage: `url("${picture}")` } : undefined}>
-          <h3>Your journey, tracked live</h3>
-          <div className="row ok">
-            <span>✓</span>
-            <div>
-              IELTS Speaking<small>Course completed</small>
-            </div>
-          </div>
-          <div className="row ok">
-            <span>✓</span>
-            <div>
-              Documents verified<small>12 of 12 uploaded</small>
-            </div>
-          </div>
-          <div className="row">
-            <span>•</span>
-            <div>
-              University review<small>Decision in about 9 days</small>
-            </div>
-          </div>
-          <div className="bar">
-            <i style={{ width: "62%" }}></i>
-          </div>
-        </div>
+        <LiveProgress title="Your journey, tracked live" publicTitle="Open now" modules={ALL_MODULES} picture={picture} />
       </div>
     </div>
   );

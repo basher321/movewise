@@ -21,6 +21,7 @@ const LINES: Record<Module, string> = {
   study: "Universities and colleges we work with.",
   job: "Employers and recruitment partners we work with.",
   visa: "Visa centres and immigration partners we work with.",
+  remote: "Remote employers and hiring partners we work with.",
 };
 
 // B18: "Our partners" on one module's page, with only that module's partners. Not shown when the

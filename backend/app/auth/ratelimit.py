@@ -10,7 +10,7 @@ from sqlalchemy.engine import Connection
 
 from app.errors import ApiError
 
-SignInKind = Literal["admin", "course", "study", "job", "visa"]
+SignInKind = Literal["admin", "course", "study", "job", "visa", "remote"]
 
 WINDOW = timedelta(minutes=15)
 MAX_PER_EMAIL = 10

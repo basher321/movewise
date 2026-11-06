@@ -11,6 +11,7 @@ import {
   listUniversities,
   listVacancies,
   listVisaPrograms,
+  listRemoteJobs,
   MODULES,
   type AdminUser,
   type LicenceView,
@@ -25,6 +26,7 @@ const LOCK_TESTS: { module: Module; label: string; call: () => Promise<unknown[]
   { module: "study", label: "GET /api/universities", call: listUniversities },
   { module: "job", label: "GET /api/vacancies", call: listVacancies },
   { module: "visa", label: "GET /api/visa-programs", call: listVisaPrograms },
+  { module: "remote", label: "GET /api/remote-jobs", call: listRemoteJobs },
 ];
 
 function shortDate(iso: string | null | undefined): string {

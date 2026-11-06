@@ -114,6 +114,8 @@ async def upload_document(
     if doc_type not in DOCUMENT_TYPES[app_module]:
         raise _invalid("Please choose one of the required document types.")
     mime = check_file(data)
+    if app["self_apply"]:
+        raise ApiError("CONFLICT", 409, "A Self Apply has no documents to upload.")
     if app["status"] != "active":
         raise ApiError("CONFLICT", 409, "Documents can only be uploaded while the application is active.")
     if int(conn.execute(_UPLOADS_LAST_HOUR, {"applicant": me.account["id"]}).scalar_one()) >= MAX_UPLOADS_PER_HOUR:

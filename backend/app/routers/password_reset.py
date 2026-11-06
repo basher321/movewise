@@ -28,7 +28,7 @@ from app.notify.worker import mail_config
 
 router = APIRouter()
 
-Kind = Literal["admin", "course", "study", "job", "visa"]
+Kind = Literal["admin", "course", "study", "job", "visa", "remote"]
 
 LINK_LIFETIME = timedelta(minutes=30)
 WINDOW = timedelta(minutes=15)

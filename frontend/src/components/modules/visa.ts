@@ -72,6 +72,7 @@ export const visaConfig: ModuleConfig = {
       ],
       conditions: [...p.eligibility, ...p.required_documents.map((d) => "Document: " + d), p.conditions].filter(Boolean),
       fee_poisha: p.fee_poisha,
+      success_rate: p.success_rate,
     };
   },
   describe: (item) => {

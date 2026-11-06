@@ -73,7 +73,8 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
 .quote p{color:var(--text);font-size:17px;margin-bottom:16px}.quote b{font-size:14px;color:var(--muted)}
 .auth{display:flex;gap:8px;align-items:center;flex-shrink:0}.auth .btn{white-space:nowrap}.auth span{font-weight:600;font-size:15px}
 /* B19: seven menu items. Between 961px and 1120px the menu is a little tighter; up to 960px it moves to its own row. */
-@media (max-width:1120px) and (min-width:961px){nav{gap:14px}nav ul{gap:2px}nav ul a{padding:8px 9px;font-size:14px}}
+/* Up to 1360px the menu is compact, so Remote Jobs and Success Stories fit on one line. */
+@media (max-width:1360px) and (min-width:961px){nav{gap:14px}nav ul{gap:2px}nav ul a{padding:8px 9px;font-size:14px}}
 @media (max-width:960px){nav{flex-wrap:wrap;padding:10px 0;gap:8px 16px}nav ul{order:3;width:100%;overflow-x:auto;margin:0}.auth{margin-left:auto}}
 dialog{border:0;border-radius:28px;padding:32px;width:min(420px,calc(100% - 32px));background:var(--surface);color:var(--text);box-shadow:0 40px 90px -30px rgba(14,27,61,.7)}
 dialog::backdrop{background:rgba(7,13,29,.6);backdrop-filter:blur(4px)}
@@ -121,6 +122,33 @@ pre.out{white-space:pre-wrap;font-size:13px;background:var(--bg);border:1px soli
 .acm{position:relative}.acm summary{list-style:none;cursor:pointer}.acm summary::-webkit-details-marker{display:none}
 .acm .pop{position:absolute;right:0;top:calc(100% + 10px);width:min(340px,86vw);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:6px 16px;z-index:40;box-shadow:0 30px 60px -30px rgba(14,27,61,.6)}
 .acm .ar{padding:12px 0;border-top:1px solid var(--line);font-size:14px}.acm .ar:first-child{border-top:0}.acm .ar small{display:block;color:var(--muted)}.acm .ar a{font-weight:700;color:var(--a)}
+/* Header "Profile" menu: gradient-initials avatar with an online dot, glass panel, one row per module (--m). */
+.acm-btn{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:99px;border:1px solid var(--line);background:color-mix(in srgb,var(--surface) 70%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--text);transition:box-shadow .15s,border-color .15s}
+.acm-btn:hover,.acm[open] .acm-btn{border-color:color-mix(in srgb,var(--a) 45%,var(--line));box-shadow:0 8px 24px -12px color-mix(in srgb,var(--a) 70%,transparent)}
+.acm .av{position:relative;flex:none;margin:0;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1;border-radius:50%;color:#fff;font-family:var(--font-sora);font-weight:700;letter-spacing:.02em;background:linear-gradient(135deg,var(--a),color-mix(in srgb,var(--a) 45%,#06B6D4));box-shadow:0 0 0 2px var(--surface),0 0 0 4px color-mix(in srgb,var(--a) 35%,transparent)}
+.acm .av.sm{width:34px;height:34px;font-size:13px}
+.acm .av.lg{width:52px;height:52px;font-size:18px}
+.acm .av .on{position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;border-radius:50%;background:#22C55E;border:2px solid var(--surface)}
+.acm .av.lg .on{width:14px;height:14px}
+.acm-btn .chev{display:grid;color:var(--muted);transition:transform .2s}
+.acm[open] .acm-btn .chev{transform:rotate(180deg)}
+.acm .pop{padding:0;overflow:hidden;width:min(320px,calc(100vw - 32px));background:color-mix(in srgb,var(--surface) 78%,transparent);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border:1px solid color-mix(in srgb,var(--line) 70%,rgba(255,255,255,.35));border-radius:22px}
+.acm-top{display:flex;align-items:center;gap:14px;padding:18px 18px 16px;background:linear-gradient(135deg,color-mix(in srgb,var(--a) 16%,transparent),color-mix(in srgb,#06B6D4 8%,transparent));border-bottom:1px solid var(--line)}
+.acm-top b{display:block;font:700 16px var(--font-sora);overflow-wrap:anywhere}
+.acm-top small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.acm-list{padding:6px 8px}
+.acm .ar{display:flex;align-items:center;gap:12px;padding:8px 10px;border:0;border-radius:14px;transition:background .15s}
+.acm .ar:hover{background:color-mix(in srgb,var(--m) 9%,transparent)}
+.acm .ar .mi{width:36px;height:36px;flex:none;border-radius:11px;display:grid;place-items:center;font-size:17px;background:color-mix(in srgb,var(--m) 15%,transparent);border:1px solid color-mix(in srgb,var(--m) 32%,transparent)}
+.acm .ar.off .mi{filter:grayscale(.6);opacity:.75}
+.acm .ar .mt{display:block;min-width:0;flex:1;color:var(--text);font-weight:400}
+.acm .ar .mt b{display:block;font-size:14px}
+.acm .ar .mt small{display:block;color:var(--muted);font-size:12.5px;overflow-wrap:anywhere}
+.acm .ar .mt small a{font-weight:700;color:var(--m)}
+.acm .ar .ib{flex:none;display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:10px;background:transparent;color:var(--muted);cursor:pointer}
+.acm .ar .ib:hover{background:color-mix(in srgb,#DC2626 12%,transparent);color:#DC2626}
+.acm-out{display:flex;align-items:center;gap:10px;width:100%;padding:13px 20px;border:0;border-top:1px solid var(--line);background:transparent;color:#DC2626;font:600 14px var(--font-dm-sans);cursor:pointer}
+.acm-out:hover{background:color-mix(in srgb,#DC2626 8%,transparent)}
 /* Courses, certificates, invoices and the admin Courses tab (F05): copied from the reference (lines 91-99, 118, 125 and 773). */
 .crumb{font-weight:600;color:var(--muted);font-size:15px;display:inline-block;margin-bottom:18px}
 .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}.meta span{border:1px solid var(--line);background:var(--surface);padding:8px 16px;border-radius:99px;font-weight:600;font-size:14px}

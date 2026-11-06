@@ -1,4 +1,4 @@
-import type { AgentInputs, AppModule, CatalogOptions, MatchCheck, University, Vacancy, VisaProgram } from "@/lib/api";
+import type { AgentInputs, AppModule, CatalogOptions, MatchCheck, SuccessRate, University, Vacancy, VisaProgram } from "@/lib/api";
 import type { Accent } from "../PageShell";
 
 // One input of the agent form (fld() in the reference): a select when options are given, else a number.
@@ -55,6 +55,10 @@ export type ItemInfo = {
   facts: [label: string, value: string][];
   conditions: string[];
   fee_poisha: number;
+  // Universities: the Self Apply fee; null or missing while Self Apply is not offered.
+  self_apply_fee_poisha?: number | null;
+  // Finished journeys (Completed or Rejected) for this item; null while none has finished.
+  success_rate: SuccessRate | null;
 };
 
 // Everything module-specific that AgentWidget, ItemPage and ApplicationPage need.

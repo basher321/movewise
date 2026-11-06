@@ -12,10 +12,12 @@ import type {
   FeeChanges,
   FeesView,
   MatchJobInput,
+  MatchRemoteInput,
   MatchResult,
   MatchStudyInput,
   MatchVisaInput,
   PublicCourseGroup,
+  SuccessStories,
   University,
   UniversityInput,
   Vacancy,
@@ -35,11 +37,17 @@ export const listVacancies = () => get<Vacancy[]>("/vacancies");
 export const getVacancy = (slug: string) => get<Vacancy>("/vacancies/" + encodeURIComponent(slug));
 export const listVisaPrograms = () => get<VisaProgram[]>("/visa-programs");
 export const getVisaProgram = (slug: string) => get<VisaProgram>("/visa-programs/" + encodeURIComponent(slug));
+// Remote Jobs: remote roles (vacancies with remote = true), in their own module.
+export const listRemoteJobs = () => get<Vacancy[]>("/remote-jobs");
+export const getRemoteJob = (slug: string) => get<Vacancy>("/remote-jobs/" + encodeURIComponent(slug));
 export const getCatalogOptions = () => get<CatalogOptions>("/catalog/options");
+// Success Stories: made automatically from completed cases (short names only).
+export const getSuccessStories = () => get<SuccessStories>("/success-stories");
 
 export const matchUniversities = (input: MatchStudyInput) => post<MatchResult<University>[]>("/match/study", input);
 export const matchVacancies = (input: MatchJobInput) => post<MatchResult<Vacancy>[]>("/match/job", input);
 export const matchVisaPrograms = (input: MatchVisaInput) => post<MatchResult<VisaProgram>[]>("/match/visa", input);
+export const matchRemoteJobs = (input: MatchRemoteInput) => post<MatchResult<Vacancy>[]>("/match/remote", input);
 
 export async function askAgent(module: AppModule, question: string, inputs: AgentInputs | null): Promise<string> {
   return (await post<{ answer: string }>(`/agent/${module}/ask`, { question, inputs })).answer;
@@ -87,11 +95,20 @@ export const listAdminVacancies = () => get<Vacancy[]>("/admin/vacancies");
 export const saveVacancy = (id: string | null, vacancy: VacancyInput) =>
   id ? put<Vacancy>("/admin/vacancies/" + id, vacancy) : post<Vacancy>("/admin/vacancies", vacancy);
 
+export const listAdminRemoteJobs = () => get<Vacancy[]>("/admin/remote-jobs");
+export const saveRemoteJob = (id: string | null, job: VacancyInput) =>
+  id ? put<Vacancy>("/admin/remote-jobs/" + id, job) : post<Vacancy>("/admin/remote-jobs", job);
+
 export const listAdminVisaPrograms = () => get<VisaProgram[]>("/admin/visa-programs");
 export const saveVisaProgram = (id: string | null, program: VisaProgramInput) =>
   id ? put<VisaProgram>("/admin/visa-programs/" + id, program) : post<VisaProgram>("/admin/visa-programs", program);
 
 export const getFees = () => get<FeesView>("/admin/fees");
 export const saveFees = (changes: FeeChanges) =>
-  put<FeesView>("/admin/fees", { study: changes.study ?? {}, job: changes.job ?? {}, visa: changes.visa ?? {} });
+  put<FeesView>("/admin/fees", {
+    study: changes.study ?? {},
+    job: changes.job ?? {},
+    visa: changes.visa ?? {},
+    remote: changes.remote ?? {},
+  });
 export const resetFees = (scope: AppModule | "all") => post<FeesView>("/admin/fees/reset", { scope });

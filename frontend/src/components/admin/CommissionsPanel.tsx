@@ -22,7 +22,12 @@ import FormDialog from "./FormDialog";
 import { handleFailure } from "./failure";
 import type { ShowToast } from "./Toast";
 
-export const SECTION_NAMES: Record<AgentSection, string> = { study: "Student Consultancy", job: "Job Processing", visa: "Immigration Processing" };
+export const SECTION_NAMES: Record<AgentSection, string> = {
+  study: "Student Consultancy",
+  job: "Job Processing",
+  visa: "Immigration Processing",
+  remote: "Remote Jobs",
+};
 
 const STATUS: Record<CommissionStatus, [string, string]> = {
   due: ["Due", "bd warn"],

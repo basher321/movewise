@@ -85,6 +85,14 @@ const WORDS: Record<AppModule, { title: string; who: string; provider: string; b
     emailApplicant: "✉ Message applicant",
     emailProvider: "✉ Email embassy",
   },
+  remote: {
+    title: "Remote Jobs",
+    who: "Remote worker",
+    provider: "employer",
+    badge: "Remote",
+    emailApplicant: "✉ Message applicant",
+    emailProvider: "✉ Email employer",
+  },
 };
 
 type Props = { module: AppModule; admin: AdminUser; toast: ShowToast; onSignedOut: () => void };
@@ -334,6 +342,8 @@ function localInput(iso: string | null): string {
 
 function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSignedOut }: CardProps) {
   const words = WORDS[module];
+  // Remote Jobs cases are handled like Job Processing cases: interview, offer and employer.
+  const jobLike = module === "job" || module === "remote";
   const config = configOf(module);
   const { settings } = useSettings();
   const [stageTo, setStageTo] = useState<number | null>(null);
@@ -362,13 +372,13 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
     if (busy) return;
     const changes: CaseChanges = {};
     if (assigned !== (r.assigned_to?.id ?? "")) changes.assigned_to = assigned || null;
-    // Study and visa cases have a deadline; job and visa cases an interview (visa: biometrics / interview).
-    if (module !== "job" && deadline !== (r.deadline ?? "")) changes.deadline = deadline || null;
+    // Study and visa cases have a deadline; job, remote and visa cases an interview (visa: biometrics / interview).
+    if (!jobLike && deadline !== (r.deadline ?? "")) changes.deadline = deadline || null;
     if (module !== "study") {
       if (interview !== localInput(r.interview_at)) changes.interview_at = interview || null;
       if (result !== r.interview_result) changes.interview_result = result;
     }
-    if (module === "job") {
+    if (jobLike) {
       const s = salary.trim();
       const current = r.offered_salary_usd ? String(r.offered_salary_usd) : "";
       if (s !== current) {
@@ -409,7 +419,7 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
     }
   }
 
-  const providerName = module === "job" ? (r.item.employer ?? "the employer") : r.item.title;
+  const providerName = jobLike ? (r.item.employer ?? "the employer") : r.item.title;
   const flag = COUNTRY_FLAGS[r.item.country] ?? "🌐";
 
   return (
@@ -417,6 +427,7 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
       <div className="cr" style={{ margin: "0 0 8px", gap: 8 }}>
         <span className={STATUS[r.status][1]}>{STATUS[r.status][0]}</span>
         <span className="bd in">{words.badge}</span>
+        {r.self_apply ? <span className="bd info">Self Apply</span> : null}
         <span className={r.fee_paid ? "bd ok" : "bd warn"}>{r.fee_paid ? "Fee paid" : "Fee pending"}</span>
         {r.missing_count ? <span className="bd warn">{r.missing_count} documents missing</span> : null}
       </div>
@@ -534,7 +545,7 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
               ))}
             </select>
           </label>
-          {module !== "job" ? (
+          {!jobLike ? (
             <label className="fl">
               <span>{module === "visa" ? "Lodgement deadline" : "Application deadline"}</span>
               <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
@@ -556,7 +567,7 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
                   ))}
                 </select>
               </label>
-              {module === "job" ? <TextField label="Offered salary (USD/month)" value={salary} onChange={setSalary} /> : null}
+              {jobLike ? <TextField label="Offered salary (USD/month)" value={salary} onChange={setSalary} /> : null}
             </>
           ) : null}
           <TextField label="Reason / note to applicant (needed for On hold, Rejected or reopening)" value={reason} onChange={setReason} area={2} full />
@@ -607,7 +618,7 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
         )}
       </div>
 
-      {r.status === "completed" || r.letter ? (
+      {r.status !== "withdrawn" || r.letter ? (
         <div style={{ marginTop: 18 }}>
           <h4 style={{ margin: "0 0 6px" }}>
             Completion letter{" "}
@@ -624,7 +635,13 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
           <div className="xrow">
             <div style={{ minWidth: 0, flex: 1 }}>
               <b>{r.letter ? r.letter.id : "Draft preview"}</b>
-              <small>{r.letter ? "Issued " + formatDate(r.letter.issued_at) : "Issue the letter to send it to the client."}</small>
+              <small>
+                {r.letter
+                  ? "Issued " + formatDate(r.letter.issued_at)
+                  : r.status === "completed"
+                    ? "Issue the letter to send it to the client."
+                    : "You can issue it once the case is completed (last stage, or status Completed)."}
+              </small>
             </div>
             <div className="cr" style={{ margin: 0, gap: 8 }}>
               <a className="lk" href={caseLetterPdfUrl(r.id)} target="_blank" rel="noopener">
@@ -639,7 +656,7 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
                     Send
                   </button>
                 ) : null
-              ) : (
+              ) : r.status !== "completed" ? null : (
                 <button
                   type="button"
                   className="btn sm"

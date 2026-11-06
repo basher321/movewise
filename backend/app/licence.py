@@ -27,14 +27,15 @@ from sqlalchemy.engine import Connection
 
 from app.errors import ApiError
 
-Module = Literal["course", "study", "job", "visa"]
+Module = Literal["course", "study", "job", "visa", "remote"]
 
-MODULES: tuple[Module, ...] = ("course", "study", "job", "visa")
+MODULES: tuple[Module, ...] = ("course", "study", "job", "visa", "remote")
 MODULE_LABELS: dict[Module, str] = {
     "course": "Training",
     "study": "Student Consultancy",
     "job": "Job Processing",
     "visa": "Immigration Processing",
+    "remote": "Remote Jobs",
 }
 KEY_PREFIX = "MW1"
 MAX_KEY_LENGTH = 4096
@@ -193,7 +194,7 @@ class LicenceState:
 
 
 _SELECT_LICENCE = text(
-    "SELECT key, holder, module_course, module_study, module_job, module_visa, expires_at "
+    "SELECT key, holder, module_course, module_study, module_job, module_visa, module_remote, expires_at "
     "FROM licence WHERE singleton = 'licence'"
 )
 

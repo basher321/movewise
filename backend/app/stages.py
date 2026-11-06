@@ -1,11 +1,12 @@
 """Stage names and required documents per module, copied from the reference (ST, JT, DOCS).
-Immigration Processing (visa, spec B19) follows the same pattern."""
+Immigration Processing (visa, spec B19) and Remote Jobs (remote) follow the same pattern.
+Remote Jobs has no visa, medical or flight steps: the work is done from home."""
 
 from typing import Literal
 
-AppModule = Literal["study", "job", "visa"]
+AppModule = Literal["study", "job", "visa", "remote"]
 
-APP_MODULES: tuple[AppModule, ...] = ("study", "job", "visa")
+APP_MODULES: tuple[AppModule, ...] = ("study", "job", "visa", "remote")
 
 STAGES: dict[AppModule, tuple[str, ...]] = {
     "study": (
@@ -39,6 +40,14 @@ STAGES: dict[AppModule, tuple[str, ...]] = {
         "Visa decision",
         "Ready to travel ✈",
     ),
+    "remote": (
+        "Application started",
+        "Profile screening",
+        "Skills test / interview",
+        "Job offer & contract",
+        "Onboarding",
+        "Started work ✓",
+    ),
 }
 
 DOCUMENT_TYPES: dict[AppModule, tuple[str, ...]] = {
@@ -67,6 +76,12 @@ DOCUMENT_TYPES: dict[AppModule, tuple[str, ...]] = {
         "Invitation, sponsor or family documents",
         "Previous visas and travel history",
         "Other supporting documents",
+    ),
+    "remote": (
+        "Updated CV",
+        "Education and experience certificates",
+        "National ID or passport",
+        "Portfolio or work samples",
     ),
 }
 

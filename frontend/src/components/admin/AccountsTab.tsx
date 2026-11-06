@@ -68,7 +68,7 @@ type Props = { admin?: AdminUser; toast: ShowToast; onSignedOut: () => void };
 // The Accounts tab (showAccounts() in the reference, spec F09): super admin and finance only.
 export default function AccountsTab({ admin, toast, onSignedOut }: Props) {
   const { licence } = useSettings();
-  const commissionSections = (["study", "job", "visa"] as const).filter((m) => licence?.modules[m]);
+  const commissionSections = (["study", "job", "visa", "remote"] as const).filter((m) => licence?.modules[m]);
   const [period, setPeriod] = useState<LedgerPeriod>("all");
   const [direction, setDirection] = useState<LedgerDirection | "all">("all");
   const [page, setPage] = useState(1);
@@ -432,7 +432,7 @@ export default function AccountsTab({ admin, toast, onSignedOut }: Props) {
                 </>
               ),
             },
-            { head: "Module", cell: (i) => (i.module === "course" ? "Training" : i.module === "study" ? "Consultancy" : i.module === "visa" ? "Immigration" : "Jobs") },
+            { head: "Module", cell: (i) => (i.module === "course" ? "Training" : i.module === "study" ? "Consultancy" : i.module === "visa" ? "Immigration" : i.module === "remote" ? "Remote" : "Jobs") },
             { head: "Amount", cell: (i) => formatMoney(i.amount_poisha) },
             { head: "Status", cell: (i) => (i.status === "refunded" ? <span className="bd no">Refunded</span> : <span className="bd ok">Paid</span>) },
             { head: "Email", cell: (i) => (i.email_status === "sent" ? "Sent" : i.email_status === "failed" ? "Failed" : "Queued") },
@@ -518,7 +518,7 @@ function AddEntry({ onDone, onFail }: { onDone: () => void; onFail: (err: unknow
             <span>Category</span>
             <select value={category} onChange={(e) => setCategory(e.target.value)}>
               {LEDGER_CATEGORIES[direction]
-                .filter((c) => !["course", "study", "job", "visa", "refund"].includes(c.key))
+                .filter((c) => !["course", "study", "job", "visa", "remote", "refund"].includes(c.key))
                 .map((c) => (
                   <option key={c.key} value={c.key}>
                     {c.label}

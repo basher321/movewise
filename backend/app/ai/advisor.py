@@ -13,10 +13,11 @@ from sqlalchemy.engine import Connection
 from app.ai.config import ready_providers
 from app.ai.context import build_facts
 from app.ai.failover import first_answer
+from app.ai.grounding import is_grounded
 from app.errors import ApiError
 from app.match import agent_answer
 
-AgentModule = Literal["study", "job", "visa"]
+AgentModule = Literal["study", "job", "visa", "remote"]
 RATE_LIMIT = 20
 RATE_WINDOW = "10 minutes"
 RATE_WINDOW_SECONDS = 600
@@ -54,10 +55,13 @@ def _reserve(ip: str) -> bool:
         return True
 
 
-SYSTEM_TEMPLATE = """You are the {company} advisor for {section}. You answer visitors' questions on the company website.
+SYSTEM_TEMPLATE = """You are the {company} advisor for {section} only. You answer visitors' questions on the company website.
 
 Rules:
-- Answer only from FACTS below. FACTS come from the company's own database and are the only truth.
+- Answer only from FACTS below. FACTS come from the company's own database and are the only truth. Use no outside knowledge, no general advice and no opinions.
+- Your only purpose is {section}: the items in FACTS.{items_key} and their fields, the application fee, the process stages, the required documents, the countries offered and the company contact details. Questions about anything else (other services, other countries' rules, news, coding, general chat) get exactly this reply: "I can only help with {section} questions." followed by the contact details in FACTS.company.
+- Answer only what was asked. Do not add items, fields or tips that the question did not ask about.
+- Copy names, numbers, amounts and dates exactly as written in FACTS. Never round, convert currencies, estimate or calculate new numbers.
 - Never invent or guess universities, jobs, employers, countries, fees, tuition, salaries, deadlines, intakes, requirements, scholarships, visa rules or success rates. If FACTS do not contain the answer, say politely that you do not have that information yet, and suggest a free consultation using the contact details in FACTS.company.
 - When FACTS.items_match_the_question is false, the listed items are only an overview of what is offered; say so instead of claiming they match.
 - Money: amounts in USD are as written in FACTS; the application fee is in taka (৳).
@@ -75,7 +79,9 @@ def _rate_limited(conn: Connection, ip: str) -> bool:
 
 def build_prompt(conn: Connection, module: AgentModule, question: str, inputs: dict[str, Any] | None) -> tuple[str, str]:
     facts = build_facts(conn, module, question, inputs)
-    system = SYSTEM_TEMPLATE.format(company=facts["company"].get("name", "company"), section=facts["section"])
+    system = SYSTEM_TEMPLATE.format(
+        company=facts["company"].get("name", "company"), section=facts["section"], items_key=facts["items_key"]
+    )
     user = (
         "FACTS (JSON):\n"
         + json.dumps(facts, ensure_ascii=False, default=str)
@@ -99,7 +105,8 @@ def answer(conn: Connection, module: AgentModule, question: str, inputs: dict[st
     if ready and _ai_slots.acquire(blocking=False):
         try:
             system, user = build_prompt(conn, module, question, inputs)
-            got = first_answer(ready, system, user)
+            # Every number in the answer must come from the facts, the form inputs or the question.
+            got = first_answer(ready, system, user, check=lambda reply: is_grounded(reply, user))
         finally:
             _ai_slots.release()
         if got is not None:

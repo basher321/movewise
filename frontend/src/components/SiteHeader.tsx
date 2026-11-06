@@ -16,7 +16,8 @@ const MENU: { href: string; label: string; module?: Module }[] = [
   { href: "/consultancy", label: "Student Consultancy", module: "study" },
   { href: "/jobs", label: "Job Processing", module: "job" },
   { href: "/immigration", label: "Immigration", module: "visa" },
-  { href: "/about", label: "About Us" },
+  { href: "/remote-jobs", label: "Remote Jobs", module: "remote" },
+  { href: "/success-stories", label: "Success Stories" },
   { href: "/contact", label: "Contact" },
 ];
 

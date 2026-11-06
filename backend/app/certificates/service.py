@@ -128,7 +128,7 @@ def _case_item(row: RowMapping) -> tuple[str, str]:
     module = row["module"]
     if module == "study":
         return row["u_name"], f"{row['u_name']}, {row['u_country']}"
-    if module == "job":
+    if module in ("job", "remote"):
         return row["v_title"], f"{row['v_title']} at {row['v_employer']}, {row['v_country']}"
     visa_type = VISA_TYPES.get(row["vp_type"], row["vp_type"])
     return row["vp_title"], f"{row['vp_title']} ({visa_type}), {row['vp_country']}"

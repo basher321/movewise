@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Button from "@/components/Button";
+import LiveProgress from "@/components/LiveProgress";
 import PageShell from "@/components/PageShell";
 import PartnerStrip from "@/components/PartnerStrip";
 import DestinationChips from "@/components/agent/DestinationChips";
@@ -25,30 +26,7 @@ export default function ImmigrationPage() {
               </Button>
             </div>
           </div>
-          <div className="vis">
-            <h3>Visa application</h3>
-            <div className="row ok">
-              <span>✓</span>
-              <div>
-                Eligibility checked<small>By your advisor</small>
-              </div>
-            </div>
-            <div className="row ok">
-              <span>✓</span>
-              <div>
-                File lodged<small>Biometrics date in your profile</small>
-              </div>
-            </div>
-            <div className="row">
-              <span>•</span>
-              <div>
-                Visa decision<small>Every update online</small>
-              </div>
-            </div>
-            <div className="bar">
-              <i style={{ width: "62%" }}></i>
-            </div>
-          </div>
+          <LiveProgress title="Visa application" publicTitle="Visa programmes" modules={["visa"]} />
         </div>
       </div>
 

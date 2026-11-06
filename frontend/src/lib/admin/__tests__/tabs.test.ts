@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { AdminUser, LicenceView } from "../../api";
 import { allowedTabs, resolveTab } from "../tabs";
 
-const ALL: LicenceView = { holder: "Test", expires_at: null, active: true, modules: { course: true, study: true, job: true, visa: true } };
-const STUDY_ONLY: LicenceView = { holder: "Test", expires_at: null, active: true, modules: { course: false, study: true, job: false, visa: false } };
+const ALL: LicenceView = { holder: "Test", expires_at: null, active: true, modules: { course: true, study: true, job: true, visa: true, remote: true } };
+const STUDY_ONLY: LicenceView = { holder: "Test", expires_at: null, active: true, modules: { course: false, study: true, job: false, visa: false, remote: false } };
 
 const user = (role: AdminUser["role"], sections: AdminUser["sections"] = []): AdminUser => ({
   id: "ADM-1",
@@ -20,7 +20,7 @@ const ids = (admin: AdminUser, licence: LicenceView) => allowedTabs(admin, licen
 
 describe("admin tabs", () => {
   it("super_admin sees every tab, ending with Settings and Licence", () => {
-    expect(ids(user("super_admin"), ALL)).toEqual(["course", "study", "job", "visa", "enq", "docs", "agents", "partners", "acc", "cat", "fees", "notifs", "team", "audit", "set", "lic"]);
+    expect(ids(user("super_admin"), ALL)).toEqual(["course", "study", "job", "visa", "remote", "enq", "docs", "agents", "partners", "acc", "cat", "fees", "notifs", "team", "audit", "set", "lic"]);
   });
 
   it("admin sees only assigned licensed modules, then Enquiries, Documents, Notifications", () => {
@@ -31,7 +31,7 @@ describe("admin tabs", () => {
   it("B16: the Agents tab needs a licensed study or job section", () => {
     expect(ids(user("admin", ["course"]), ALL)).not.toContain("agents");
     expect(ids(user("admin", ["job"]), STUDY_ONLY)).not.toContain("agents");
-    expect(ids(user("super_admin"), { ...ALL, modules: { course: true, study: false, job: false, visa: false } })).not.toContain("agents");
+    expect(ids(user("super_admin"), { ...ALL, modules: { course: true, study: false, job: false, visa: false, remote: false } })).not.toContain("agents");
   });
 
   it("B18: the Partners tab follows the person's licensed modules, course included", () => {

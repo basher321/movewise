@@ -7,6 +7,7 @@ export const MODULE_UI: Record<Module, { name: string; short: string; icon: stri
   study: { name: "Student Consultancy", short: "Student", icon: "🎓", prefix: "STU", accent: "#0EA5A4" },
   job: { name: "Job Processing", short: "Jobs", icon: "🛂", prefix: "JOB", accent: "#D97706" },
   visa: { name: "Immigration Processing", short: "Immigration", icon: "🌍", prefix: "VIS", accent: "#E11D48" },
+  remote: { name: "Remote Jobs", short: "Remote", icon: "💻", prefix: "RMT", accent: "#059669" },
 };
 
 export function accentColour(module: Module, settings: PublicSettings | null): string {
@@ -20,6 +21,7 @@ export function pageModule(pathname: string): Module | null {
   if (pathname.startsWith("/consultancy")) return "study";
   if (pathname.startsWith("/jobs")) return "job";
   if (pathname.startsWith("/immigration")) return "visa";
-  const m = /^\/profile\/(course|study|job|visa)\b/.exec(pathname);
+  if (pathname.startsWith("/remote-jobs")) return "remote";
+  const m = /^\/profile\/(course|study|job|visa|remote)\b/.exec(pathname);
   return m ? (m[1] as Module) : null;
 }

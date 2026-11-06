@@ -18,6 +18,7 @@ router = APIRouter()
 _UPDATE_LICENCE = text(
     "UPDATE licence SET key = :key, holder = :holder, "
     "module_course = :module_course, module_study = :module_study, module_job = :module_job, module_visa = :module_visa, "
+    "module_remote = :module_remote, "
     "issued_at = :issued_at, expires_at = :expires_at, applied_at = now(), applied_by = :applied_by "
     "WHERE singleton = 'licence'"
 )

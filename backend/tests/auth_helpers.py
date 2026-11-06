@@ -20,10 +20,10 @@ def license_modules(conn: Connection, *modules: str) -> None:
     conn.execute(
         text(
             "UPDATE licence SET key = 'test-licence', holder = 'Test Holder', expires_at = NULL, "
-            "module_course = :course, module_study = :study, module_job = :job, module_visa = :visa "
+            "module_course = :course, module_study = :study, module_job = :job, module_visa = :visa, module_remote = :remote "
             "WHERE singleton = 'licence'"
         ),
-        {m: m in modules for m in ("course", "study", "job", "visa")},
+        {m: m in modules for m in ("course", "study", "job", "visa", "remote")},
     )
 
 

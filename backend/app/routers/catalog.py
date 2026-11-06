@@ -24,14 +24,20 @@ from app.catalog import (
     EDUCATION_LEVELS,
     ENGLISH_LEVELS,
     PUBLIC_LIMIT,
+    REMOTE_SKILLS,
+    UNI_SUCCESS,
+    VAC_SUCCESS,
+    VISA_SUCCESS,
     VISA_TYPES,
     course_view,
     default_fees,
     group_view,
     not_found,
+    public_remote_jobs,
     public_universities,
     public_vacancies,
     public_visa_programs,
+    success_columns,
     university_view,
     vacancy_view,
     visa_program_view,
@@ -42,12 +48,15 @@ from app.licence import read_licence
 from app.match import (
     ANY_VISA_TYPE,
     JobInput,
+    RemoteInput,
     StudyInput,
     VisaInput,
     check_job,
+    check_remote,
     check_study,
     check_visa,
     match_job,
+    match_remote,
     match_study,
     match_visa,
 )
@@ -59,23 +68,28 @@ _PUBLIC_COURSES = text(
 )
 _PUBLIC_GROUPS = text("SELECT * FROM course_groups WHERE active ORDER BY sort_order, name, id")
 _COURSE_BY_SLUG = text(f"{COURSE_SELECT} WHERE c.slug = :slug AND c.published AND g.active")
-_UNIVERSITY_BY_SLUG = text("SELECT * FROM universities WHERE slug = :slug AND published")
+_UNIVERSITY_BY_SLUG = text(f"SELECT *, {UNI_SUCCESS} FROM universities WHERE slug = :slug AND published")
 _VACANCY_BY_SLUG = text(
-    "SELECT * FROM vacancies WHERE slug = :slug AND NOT closed AND employer_verified"
+    f"SELECT *, {VAC_SUCCESS} FROM vacancies WHERE slug = :slug AND NOT remote AND NOT closed AND employer_verified"
+)
+# Remote Jobs: remote vacancies only.
+_REMOTE_JOB_BY_SLUG = text(
+    f"SELECT *, {VAC_SUCCESS} FROM vacancies WHERE slug = :slug AND remote AND NOT closed AND employer_verified"
 )
 # B05: a hidden, closed or unverified item stays readable for an applicant who applied to it.
 _APPLIED_UNIVERSITY = text(
-    "SELECT u.* FROM universities u WHERE u.slug = :slug AND EXISTS ("
+    f"SELECT u.*, {success_columns('university_id', 'u')} FROM universities u WHERE u.slug = :slug AND EXISTS ("
     "SELECT 1 FROM applications a WHERE a.university_id = u.id AND a.applicant_id = :applicant)"
 )
 _APPLIED_VACANCY = text(
-    "SELECT v.* FROM vacancies v WHERE v.slug = :slug AND EXISTS ("
+    f"SELECT v.*, {success_columns('vacancy_id', 'v')} FROM vacancies v WHERE v.slug = :slug AND v.remote = :remote "
+    "AND EXISTS ("
     "SELECT 1 FROM applications a WHERE a.vacancy_id = v.id AND a.applicant_id = :applicant)"
 )
 
-_VISA_PROGRAM_BY_SLUG = text("SELECT * FROM visa_programs WHERE slug = :slug AND published")
+_VISA_PROGRAM_BY_SLUG = text(f"SELECT *, {VISA_SUCCESS} FROM visa_programs WHERE slug = :slug AND published")
 _APPLIED_VISA_PROGRAM = text(
-    "SELECT p.* FROM visa_programs p WHERE p.slug = :slug AND EXISTS ("
+    f"SELECT p.*, {success_columns('visa_program_id', 'p')} FROM visa_programs p WHERE p.slug = :slug AND EXISTS ("
     "SELECT 1 FROM applications a WHERE a.visa_program_id = p.id AND a.applicant_id = :applicant)"
 )
 
@@ -97,6 +111,15 @@ class JobIn(BaseModel):
     education: str = Field(max_length=60)
     english: str = Field(max_length=60)
     passport_ready: StrictBool
+    salary_goal_usd: float | None = None
+
+
+class RemoteIn(BaseModel):
+    occupation: str = Field(max_length=120)
+    country: str = Field(default="", max_length=120)
+    experience: float
+    education: str = Field(max_length=60)
+    english: str = Field(max_length=60)
     salary_goal_usd: float | None = None
 
 
@@ -133,12 +156,17 @@ def get_course(slug: str, conn: Connection = Depends(get_conn)) -> dict[str, Any
 
 
 def _applied_item(
-    request: Request, conn: Connection, module: Literal["study", "job", "visa"], sql: TextClause, slug: str
+    request: Request,
+    conn: Connection,
+    module: Literal["study", "job", "visa", "remote"],
+    sql: TextClause,
+    slug: str,
+    extra: dict[str, Any] | None = None,
 ) -> RowMapping | None:
     applicant = current_applicant_row(request, conn, module)
     if applicant is None:
         return None
-    return conn.execute(sql, {"slug": slug, "applicant": applicant["id"]}).mappings().one_or_none()
+    return conn.execute(sql, {"slug": slug, "applicant": applicant["id"], **(extra or {})}).mappings().one_or_none()
 
 
 @router.get("/universities", dependencies=[Depends(require_module("study"))])
@@ -167,10 +195,26 @@ def list_vacancies(conn: Connection = Depends(get_conn)) -> list[dict[str, Any]]
 def get_vacancy(slug: str, request: Request, conn: Connection = Depends(get_conn)) -> dict[str, Any]:
     row = conn.execute(_VACANCY_BY_SLUG, {"slug": slug}).mappings().one_or_none()
     if row is None:
-        row = _applied_item(request, conn, "job", _APPLIED_VACANCY, slug)
+        row = _applied_item(request, conn, "job", _APPLIED_VACANCY, slug, {"remote": False})
     if row is None:
         raise not_found("Vacancy")
     return vacancy_view(row, default_fees(conn)["job"])
+
+
+@router.get("/remote-jobs", dependencies=[Depends(require_module("remote"))])
+def list_remote_jobs(conn: Connection = Depends(get_conn)) -> list[dict[str, Any]]:
+    fee = default_fees(conn)["remote"]
+    return [vacancy_view(r, fee) for r in public_remote_jobs(conn)]
+
+
+@router.get("/remote-jobs/{slug}", dependencies=[Depends(require_module("remote"))])
+def get_remote_job(slug: str, request: Request, conn: Connection = Depends(get_conn)) -> dict[str, Any]:
+    row = conn.execute(_REMOTE_JOB_BY_SLUG, {"slug": slug}).mappings().one_or_none()
+    if row is None:
+        row = _applied_item(request, conn, "remote", _APPLIED_VACANCY, slug, {"remote": True})
+    if row is None:
+        raise not_found("Remote job")
+    return vacancy_view(row, default_fees(conn)["remote"])
 
 
 @router.get("/visa-programs", dependencies=[Depends(require_module("visa"))])
@@ -220,9 +264,18 @@ async def post_match_job(request: Request, conn: Connection = Depends(get_conn))
     return match_job(conn, data)
 
 
+@router.post("/match/remote", dependencies=[Depends(require_module("remote"))])
+async def post_match_remote(request: Request, conn: Connection = Depends(get_conn)) -> list[dict[str, Any]]:
+    body = parse_body(RemoteIn, await request.body())
+    data = check_remote(
+        RemoteInput(body.occupation, body.country, body.experience, body.education, body.english, body.salary_goal_usd)
+    )
+    return match_remote(conn, data)
+
+
 @router.post("/agent/{module}/ask")
 async def ask_agent(module: str, request: Request, conn: Connection = Depends(get_conn)) -> dict[str, str]:
-    if module not in ("study", "job", "visa"):
+    if module not in ("study", "job", "visa", "remote"):
         raise ApiError("NOT_FOUND", 404, "Not found.")
     ensure_licensed(conn, module)  # type: ignore[arg-type]
     body = parse_body(AgentIn, await request.body())
@@ -248,9 +301,11 @@ def catalog_options(conn: Connection = Depends(get_conn)) -> dict[str, list[str]
     study = licence.licensed("study")
     job = licence.licensed("job")
     visa = licence.licensed("visa")
+    remote = licence.licensed("remote")
     universities = public_universities(conn) if study else []
     vacancies = public_vacancies(conn) if job else []
     programs = public_visa_programs(conn) if visa else []
+    remote_jobs = public_remote_jobs(conn) if remote else []
     visa_types_used = {p["visa_type"] for p in programs}
     levels = [lv for u in universities for lv in u["levels"]]
     used_levels = [lv for lv in BASE_STUDY_LEVELS if lv in levels]
@@ -260,11 +315,17 @@ def catalog_options(conn: Connection = Depends(get_conn)) -> dict[str, list[str]
         "occupations": sorted({v["occupation"] for v in vacancies}),
         # Every country (plus any other country a vacancy uses), so applicants can pick any destination.
         "countries": [ANY_COUNTRY, *sorted(set(WORLD_COUNTRIES) | {v["country"] for v in vacancies}, key=str.casefold)] if job else [],
-        "education_levels": list(EDUCATION_LEVELS) if job else [],
-        "english_levels": list(ENGLISH_LEVELS) if job else [],
+        "education_levels": list(EDUCATION_LEVELS) if job or remote else [],
+        "english_levels": list(ENGLISH_LEVELS) if job or remote else [],
         # B19: every country (so any destination can be asked about) and the visa types in use.
         "visa_countries": [ANY_COUNTRY, *sorted(set(WORLD_COUNTRIES) | {p["country"] for p in programs}, key=str.casefold)]
         if visa
         else [],
         "visa_types": [t for t in VISA_TYPES if t in visa_types_used],
+        # Remote Jobs: common remote skills plus the skills of open remote roles, and every country
+        # (plus any other country a remote employer uses), like Job Processing.
+        "remote_occupations": _merged(REMOTE_SKILLS, [v["occupation"] for v in remote_jobs]) if remote else [],
+        "remote_countries": [ANY_COUNTRY, *sorted(set(WORLD_COUNTRIES) | {v["country"] for v in remote_jobs}, key=str.casefold)]
+        if remote
+        else [],
     }

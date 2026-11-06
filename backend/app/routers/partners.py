@@ -63,7 +63,7 @@ def _uuid(value: str) -> UUID:
 
 def _module(value: str) -> Module:
     if value not in MODULES:
-        raise _invalid("Please choose a module: course, study, job or visa.")
+        raise _invalid("Please choose a module: course, study, job, visa or remote.")
     return cast(Module, value)
 
 

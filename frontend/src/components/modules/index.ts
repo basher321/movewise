@@ -1,5 +1,6 @@
 import type { AppModule } from "@/lib/api";
 import { jobConfig } from "./job";
+import { remoteConfig } from "./remote";
 import { studyConfig } from "./study";
 import type { ModuleConfig } from "./types";
 import { visaConfig } from "./visa";
@@ -9,6 +10,7 @@ export const MODULE_CONFIGS: Record<AppModule, ModuleConfig> = {
   study: studyConfig,
   job: jobConfig,
   visa: visaConfig,
+  remote: remoteConfig,
 };
 
 export function configOf(module: AppModule): ModuleConfig {

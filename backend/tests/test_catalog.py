@@ -255,7 +255,7 @@ def test_b38_effective_fee(client: TestClient, owner: None) -> None:
     uni = make(client, "universities", university_body())
     vac = make(client, "vacancies", vacancy_body())
     fees = client.get("/api/admin/fees").json()
-    assert fees["defaults"] == {"study": 100000, "job": 100000, "visa": 100000}
+    assert fees["defaults"] == {"study": 100000, "job": 100000, "visa": 100000, "remote": 100000}
     assert fees["universities"][0]["effective_poisha"] == 100000
 
     saved = client.put("/api/admin/fees", json={"study": {uni["id"]: 250000}, "job": {vac["id"]: 100000}})
@@ -397,3 +397,26 @@ def test_admin_vacancy_flags_past_apply_by(client: TestClient, conn: Connection,
     listed = client.get("/api/admin/vacancies").json()[0]
     assert listed["past_apply_by"] is True
     assert len(client.get("/api/vacancies").json()) == 1
+
+
+def test_success_rate_counts_finished_journeys(client: TestClient, conn: Connection, owner: None) -> None:
+    from auth_helpers import verified_applicant
+
+    vac = make(client, "vacancies", vacancy_body())
+    assert client.get(f"/api/vacancies/{vac['slug']}").json()["success_rate"] is None
+    verified_applicant(client, conn, "job", "rate@example.test")
+
+    def finish(status: str) -> None:
+        response = client.post("/api/me/job/applications", json={"item_slug": vac["slug"], "answers": {}})
+        assert response.status_code == 200, response.text
+        conn.execute(text("UPDATE applications SET status = :s WHERE id = :id"), {"s": status, "id": response.json()["id"]})
+
+    # Completed and rejected journeys are finished; a withdrawn or open case is not counted.
+    for status in ("completed", "completed", "rejected", "withdrawn", "active"):
+        finish(status)
+    rate = client.get(f"/api/vacancies/{vac['slug']}").json()["success_rate"]
+    assert rate == {"percent": 67, "completed": 2, "finished": 3}
+    listed = [v for v in client.get("/api/vacancies").json() if v["slug"] == vac["slug"]]
+    assert listed[0]["success_rate"] == rate
+    admin = [v for v in client.get("/api/admin/vacancies").json() if v["id"] == vac["id"]]
+    assert admin[0]["success_rate"] == rate

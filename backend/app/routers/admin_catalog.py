@@ -21,6 +21,9 @@ from app.auth.deps import ensure_licensed, get_current_actor, require_super_admi
 from app.catalog import (
     COURSE_SELECT,
     MAX_LONG,
+    UNI_SUCCESS,
+    VAC_SUCCESS,
+    VISA_SUCCESS,
     VISA_TYPES,
     changed_fields,
     check_colour,
@@ -106,6 +109,7 @@ class UniversityIn(BaseModel):
     apply_link: str = Field(default="", max_length=2000)
     admissions_email: str = Field(default="", max_length=500)
     fee_override_poisha: StrictInt | None = None
+    self_apply_fee_poisha: StrictInt | None = None
     published: StrictBool = True
 
 
@@ -151,10 +155,11 @@ class FeesIn(BaseModel):
     study: dict[str, StrictInt | None] = Field(default_factory=dict)
     job: dict[str, StrictInt | None] = Field(default_factory=dict)
     visa: dict[str, StrictInt | None] = Field(default_factory=dict)
+    remote: dict[str, StrictInt | None] = Field(default_factory=dict)
 
 
 class ResetIn(BaseModel):
-    scope: Literal["study", "job", "visa", "all"]
+    scope: Literal["study", "job", "visa", "remote", "all"]
 
 
 # ---------------------------------------------------------------- helpers
@@ -329,8 +334,8 @@ async def update_course(
 _UNI_COUNT = (
     "(SELECT count(*) FROM applications a WHERE a.university_id = universities.id AND a.status <> 'withdrawn')"
 )
-_ADMIN_UNIVERSITIES = text(f"SELECT *, {_UNI_COUNT} AS applied_count FROM universities ORDER BY name, id")
-_UNIVERSITY_BY_ID = text(f"SELECT *, {_UNI_COUNT} AS applied_count FROM universities WHERE id = :id")
+_ADMIN_UNIVERSITIES = text(f"SELECT *, {_UNI_COUNT} AS applied_count, {UNI_SUCCESS} FROM universities ORDER BY name, id")
+_UNIVERSITY_BY_ID = text(f"SELECT *, {_UNI_COUNT} AS applied_count, {UNI_SUCCESS} FROM universities WHERE id = :id")
 
 
 def _university_values(body: UniversityIn, default_fee: int) -> dict[str, Any]:
@@ -361,6 +366,7 @@ def _university_values(body: UniversityIn, default_fee: int) -> dict[str, Any]:
         "apply_link": link,
         "admissions_email": opt_email(body.admissions_email, "admissions email"),
         "fee_override_poisha": stored_override(check_fee(body.fee_override_poisha), default_fee),
+        "self_apply_fee_poisha": check_fee(body.self_apply_fee_poisha),
         "published": body.published,
     }
 
@@ -411,8 +417,12 @@ async def update_university(
 # ---------------------------------------------------------------- vacancies
 
 _VAC_COUNT = "(SELECT count(*) FROM applications a WHERE a.vacancy_id = vacancies.id AND a.status <> 'withdrawn')"
-_ADMIN_VACANCIES = text(f"SELECT *, {_VAC_COUNT} AS applied_count FROM vacancies ORDER BY created_at DESC, id")
-_VACANCY_BY_ID = text(f"SELECT *, {_VAC_COUNT} AS applied_count FROM vacancies WHERE id = :id")
+# Job Processing lists on-site vacancies (remote = false); Remote Jobs lists remote ones (remote = true).
+_ADMIN_VACANCIES = text(
+    f"SELECT *, {_VAC_COUNT} AS applied_count, {VAC_SUCCESS} FROM vacancies WHERE remote = :remote "
+    "ORDER BY created_at DESC, id"
+)
+_VACANCY_BY_ID = text(f"SELECT *, {_VAC_COUNT} AS applied_count, {VAC_SUCCESS} FROM vacancies WHERE id = :id")
 
 
 def _vacancy_values(body: VacancyIn, default_fee: int) -> dict[str, Any]:
@@ -464,7 +474,7 @@ def list_admin_vacancies(
     actor: Actor = Depends(require_owner("job")), conn: Connection = Depends(get_conn)
 ) -> list[dict[str, Any]]:
     fee = default_fees(conn)["job"]
-    return [vacancy_view(r, fee, admin=True) for r in conn.execute(_ADMIN_VACANCIES).mappings()]
+    return [vacancy_view(r, fee, admin=True) for r in conn.execute(_ADMIN_VACANCIES, {"remote": False}).mappings()]
 
 
 @router.post("/admin/vacancies")
@@ -473,10 +483,15 @@ async def create_vacancy(
 ) -> dict[str, Any]:
     body = parse_body(VacancyIn, await request.body())
     fee = default_fees(conn)["job"]
+    return _create_vacancy(conn, actor, body, fee, remote=False)
+
+
+def _create_vacancy(conn: Connection, actor: Actor, body: VacancyIn, fee: int, remote: bool) -> dict[str, Any]:
     values = _vacancy_values(body, fee)
     lock_catalog(conn)
-    row = _insert(conn, "vacancies", {"slug": new_slug(conn, "vacancies", values["title"]), **values})
-    write_audit(conn, actor, "catalog.vacancy_saved", _detail(row["title"], ["added"]))
+    row = _insert(conn, "vacancies", {"slug": new_slug(conn, "vacancies", values["title"]), **values, "remote": remote})
+    action = "catalog.remote_job_saved" if remote else "catalog.vacancy_saved"
+    write_audit(conn, actor, action, _detail(row["title"], ["added"]))
     return _admin_vacancy(conn, row["id"], fee)
 
 
@@ -488,9 +503,18 @@ async def update_vacancy(
     conn: Connection = Depends(get_conn),
 ) -> dict[str, Any]:
     body = parse_body(VacancyIn, await request.body())
-    fee = default_fees(conn)["job"]
+    return _update_vacancy(conn, actor, vacancy_id, body, default_fees(conn)["job"], remote=False)
+
+
+def _update_vacancy(
+    conn: Connection, actor: Actor, vacancy_id: str, body: VacancyIn, fee: int, remote: bool
+) -> dict[str, Any]:
     values = _vacancy_values(body, fee)
-    before = _locked(conn, "vacancies", vacancy_id, "Vacancy")
+    what = "Remote job" if remote else "Vacancy"
+    before = _locked(conn, "vacancies", vacancy_id, what)
+    # A vacancy stays in the section it was added in (Job Processing or Remote Jobs).
+    if before["remote"] != remote:
+        raise not_found(what)
     changed = changed_fields(before, values)
     if changed:
         _update(conn, "vacancies", before["id"], values)
@@ -498,8 +522,39 @@ async def update_vacancy(
             _verified_audit(conn, actor, values)
         others = [f for f in changed if f != "employer_verified"]
         if others:
-            write_audit(conn, actor, "catalog.vacancy_saved", _detail(values["title"], others))
+            action = "catalog.remote_job_saved" if remote else "catalog.vacancy_saved"
+            write_audit(conn, actor, action, _detail(values["title"], others))
     return _admin_vacancy(conn, before["id"], fee)
+
+
+# ---------------------------------------------------------------- remote jobs (Remote Jobs module)
+
+
+@router.get("/admin/remote-jobs")
+def list_admin_remote_jobs(
+    actor: Actor = Depends(require_owner("remote")), conn: Connection = Depends(get_conn)
+) -> list[dict[str, Any]]:
+    fee = default_fees(conn)["remote"]
+    return [vacancy_view(r, fee, admin=True) for r in conn.execute(_ADMIN_VACANCIES, {"remote": True}).mappings()]
+
+
+@router.post("/admin/remote-jobs")
+async def create_remote_job(
+    request: Request, actor: Actor = Depends(require_owner("remote")), conn: Connection = Depends(get_conn)
+) -> dict[str, Any]:
+    body = parse_body(VacancyIn, await request.body())
+    return _create_vacancy(conn, actor, body, default_fees(conn)["remote"], remote=True)
+
+
+@router.put("/admin/remote-jobs/{job_id}")
+async def update_remote_job(
+    job_id: str,
+    request: Request,
+    actor: Actor = Depends(require_owner("remote")),
+    conn: Connection = Depends(get_conn),
+) -> dict[str, Any]:
+    body = parse_body(VacancyIn, await request.body())
+    return _update_vacancy(conn, actor, job_id, body, default_fees(conn)["remote"], remote=True)
 
 
 # ---------------------------------------------------------------- visa programmes (B19)
@@ -508,9 +563,9 @@ _VISA_COUNT = (
     "(SELECT count(*) FROM applications a WHERE a.visa_program_id = visa_programs.id AND a.status <> 'withdrawn')"
 )
 _ADMIN_VISA_PROGRAMS = text(
-    f"SELECT *, {_VISA_COUNT} AS applied_count FROM visa_programs ORDER BY country, title, id"
+    f"SELECT *, {_VISA_COUNT} AS applied_count, {VISA_SUCCESS} FROM visa_programs ORDER BY country, title, id"
 )
-_VISA_PROGRAM_BY_ID = text(f"SELECT *, {_VISA_COUNT} AS applied_count FROM visa_programs WHERE id = :id")
+_VISA_PROGRAM_BY_ID = text(f"SELECT *, {_VISA_COUNT} AS applied_count, {VISA_SUCCESS} FROM visa_programs WHERE id = :id")
 
 
 def _visa_program_values(body: VisaProgramIn, default_fee: int) -> dict[str, Any]:
@@ -583,16 +638,20 @@ async def update_visa_program(
 
 # ---------------------------------------------------------------- fees
 
-_FEE_TABLES: dict[str, tuple[str, str]] = {
-    "study": ("universities", "name"),
-    "job": ("vacancies", "title"),
-    "visa": ("visa_programs", "title"),
+# (table, name column, which rows): Job Processing and Remote Jobs share vacancies, split by remote.
+_FEE_TABLES: dict[str, tuple[str, str, str]] = {
+    "study": ("universities", "name", "true"),
+    "job": ("vacancies", "title", "NOT remote"),
+    "visa": ("visa_programs", "title", "true"),
+    "remote": ("vacancies", "title", "remote"),
 }
 
 
 def _fee_items(conn: Connection, module: str, default: int) -> list[dict[str, Any]]:
-    table, label = _FEE_TABLES[module]
-    rows = conn.execute(text(f"SELECT id, {label} AS name, fee_override_poisha FROM {table} ORDER BY {label}, id"))
+    table, label, rows_of = _FEE_TABLES[module]
+    rows = conn.execute(
+        text(f"SELECT id, {label} AS name, fee_override_poisha FROM {table} WHERE {rows_of} ORDER BY {label}, id")
+    )
     return [
         {
             "id": str(r.id),
@@ -613,6 +672,7 @@ def _fees_view(conn: Connection) -> dict[str, Any]:
         "universities": _fee_items(conn, "study", defaults["study"]) if licence.licensed("study") else [],
         "vacancies": _fee_items(conn, "job", defaults["job"]) if licence.licensed("job") else [],
         "visa_programs": _fee_items(conn, "visa", defaults["visa"]) if licence.licensed("visa") else [],
+        "remote_jobs": _fee_items(conn, "remote", defaults["remote"]) if licence.licensed("remote") else [],
     }
 
 
@@ -628,16 +688,19 @@ async def save_fees(
     body = parse_body(FeesIn, await request.body())
     defaults = default_fees(conn)
     lines: list[str] = []
-    for module, changes in (("study", body.study), ("job", body.job), ("visa", body.visa)):
+    for module, changes in (("study", body.study), ("job", body.job), ("visa", body.visa), ("remote", body.remote)):
         if not changes:
             continue
         ensure_licensed(conn, module)  # type: ignore[arg-type]
-        table, label = _FEE_TABLES[module]
-        what = {"study": "University", "job": "Vacancy", "visa": "Visa programme"}[module]
+        table, label, rows_of = _FEE_TABLES[module]
+        what = {"study": "University", "job": "Vacancy", "visa": "Visa programme", "remote": "Remote job"}[module]
         for item_id, fee in changes.items():
             check_fee(fee)
             row = conn.execute(
-                text(f"SELECT id, {label} AS name, fee_override_poisha FROM {table} WHERE id = :id FOR UPDATE"),
+                text(
+                    f"SELECT id, {label} AS name, fee_override_poisha FROM {table} "
+                    f"WHERE id = :id AND {rows_of} FOR UPDATE"
+                ),
                 {"id": parse_uuid(item_id, what)},
             ).one_or_none()
             if row is None:
@@ -660,13 +723,15 @@ async def reset_fees(
     body = parse_body(ResetIn, await request.body())
     licence = read_licence(conn)
     if body.scope == "all":
-        modules = [m for m in ("study", "job", "visa") if licence.licensed(m)]  # type: ignore[arg-type]
+        modules = [m for m in ("study", "job", "visa", "remote") if licence.licensed(m)]  # type: ignore[arg-type]
     else:
         ensure_licensed(conn, body.scope)
         modules = [body.scope]
     for module in modules:
-        table, _ = _FEE_TABLES[module]
-        conn.execute(text(f"UPDATE {table} SET fee_override_poisha = NULL WHERE fee_override_poisha IS NOT NULL"))
+        table, _, rows_of = _FEE_TABLES[module]
+        conn.execute(
+            text(f"UPDATE {table} SET fee_override_poisha = NULL WHERE fee_override_poisha IS NOT NULL AND {rows_of}")
+        )
     labels = ", ".join(MODULE_LABELS[m] for m in modules) or "none"  # type: ignore[index]
     write_audit(conn, actor, "fees.reset", labels)
     return _fees_view(conn)

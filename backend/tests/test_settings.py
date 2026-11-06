@@ -252,6 +252,6 @@ def test_saved_values_come_back(
     assert client.put("/api/settings", json=body).status_code == 200
     public = client.get("/api/settings/public").json()
     assert (public["name"], public["brand_color"]) == ("Saved Name", "#0EA5A4")
-    assert public["default_fee_poisha"] == {"study": 250000, "job": 300000, "visa": 100000}
+    assert public["default_fee_poisha"] == {"study": 250000, "job": 300000, "visa": 100000, "remote": 100000}
     # jsonb does not keep key order inside each object, so compare values, not text.
     assert public["stats"] == body["stats"]

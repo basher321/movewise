@@ -14,6 +14,7 @@ export const MODULE_LABELS: Record<Module, string> = {
   study: "🎓 Student Consultancy",
   job: "🛂 Job Processing",
   visa: "🌍 Immigration Processing",
+  remote: "💻 Remote Jobs",
 };
 
 export const ROLE_NAMES: Record<AdminRole, string> = {
@@ -35,7 +36,7 @@ export function allowedTabs(admin: AdminUser, licence: LicenceView): Tab[] {
   }
   if (r !== "finance") tabs.push({ id: "enq", label: "💬 Enquiries" }, { id: "docs", label: "📄 Documents" });
   // B16: partner agents of Student Consultancy, Job Processing and Immigration (B19). Finance sees commissions in Accounts.
-  const agentSections = (["study", "job", "visa"] as const).filter((m) => licence.modules[m] && (r === "super_admin" || (r === "admin" && admin.sections.includes(m))));
+  const agentSections = (["study", "job", "visa", "remote"] as const).filter((m) => licence.modules[m] && (r === "super_admin" || (r === "admin" && admin.sections.includes(m))));
   if (agentSections.length) tabs.push({ id: "agents", label: "🤝 Agents" });
   // B18: B2B partners and logos, in any licensed module this person works in.
   const partnerModules = MODULES.filter((m) => licence.modules[m] && (r === "super_admin" || (r === "admin" && admin.sections.includes(m))));

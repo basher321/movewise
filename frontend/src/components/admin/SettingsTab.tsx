@@ -170,7 +170,7 @@ export default function SettingsTab({ toast }: { toast: ShowToast }) {
   const { reload } = useSettings();
   const [stored, setStored] = useState<Settings | null>(null);
   const [form, setForm] = useState<SettingsInput | null>(null);
-  const [fees, setFees] = useState({ study: "", job: "", visa: "" });
+  const [fees, setFees] = useState({ study: "", job: "", visa: "", remote: "" });
   const [error, setError] = useState("");
   const [forbidden, setForbidden] = useState("");
 
@@ -181,6 +181,7 @@ export default function SettingsTab({ toast }: { toast: ShowToast }) {
       study: String(s.default_fee_poisha.study / 100),
       job: String(s.default_fee_poisha.job / 100),
       visa: String(s.default_fee_poisha.visa / 100),
+      remote: String(s.default_fee_poisha.remote / 100),
     });
   }
 
@@ -271,7 +272,12 @@ export default function SettingsTab({ toast }: { toast: ShowToast }) {
     e.preventDefault();
     if (!stored || !form) return;
     const next = cloneForm(form);
-    next.default_fee_poisha = { study: takaToPoisha(fees.study), job: takaToPoisha(fees.job), visa: takaToPoisha(fees.visa) };
+    next.default_fee_poisha = {
+      study: takaToPoisha(fees.study),
+      job: takaToPoisha(fees.job),
+      visa: takaToPoisha(fees.visa),
+      remote: takaToPoisha(fees.remote),
+    };
     next.invoice_prefix = next.invoice_prefix.trim();
     const problem = validateSettings(next, stored);
     if (problem) {
@@ -354,9 +360,10 @@ export default function SettingsTab({ toast }: { toast: ShowToast }) {
             <TextField label="Default student application fee (৳)" required value={fees.study} onChange={(v) => setFees({ ...fees, study: v })} />
             <TextField label="Default job application fee (৳)" required value={fees.job} onChange={(v) => setFees({ ...fees, job: v })} />
             <TextField label="Default immigration application fee (৳)" required value={fees.visa} onChange={(v) => setFees({ ...fees, visa: v })} />
+            <TextField label="Default remote job application fee (৳)" required value={fees.remote} onChange={(v) => setFees({ ...fees, remote: v })} />
           </div>
           <p className="sub" style={{ margin: "8px 0 0", fontSize: 13 }}>
-            Used for every university, job or visa programme without its own fee (set those in the Fees tab).
+            Used for every university, job, visa programme or remote job without its own fee (set those in the Fees tab).
           </p>
         </Section>
         <Section title="Payment gateways" sub="Money goes straight to your own merchant account. Keys are stored encrypted on the server and never shown again.">
@@ -396,7 +403,7 @@ export default function SettingsTab({ toast }: { toast: ShowToast }) {
         {form.ai ? (
           <Section
             title="AI assistants"
-            sub="The Student Consultancy, Job Processing and Immigration advisors answer only from your published universities, jobs, visa programmes and fees. Providers are tried in this order; if one fails, the next one answers. If none works, the simple built-in replies are used."
+            sub="The Student Consultancy, Job Processing, Immigration and Remote Jobs advisors answer only from your published universities, jobs, visa programmes, remote jobs and fees, each about its own section only. Providers are always tried in this order: Claude, ChatGPT, Gemini, Groq. If one fails, or gives a number that is not in your data, the next one answers. If none works, the built-in replies from your data are used."
           >
             <AiProviders ai={form.ai} stored={stored} onChange={(ai) => patch((s) => { s.ai = ai; })} />
           </Section>

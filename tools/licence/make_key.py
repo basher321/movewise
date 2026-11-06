@@ -5,7 +5,7 @@ licence_register.csv next to the private key. The register must be outside the p
 
 Usage (with the backend virtual environment):
   python tools/licence/make_key.py --private-key <path> --holder "<company>"
-      --modules course,study,job,visa [--expires YYYY-MM-DD]
+      --modules course,study,job,visa,remote [--expires YYYY-MM-DD]
       [--note "<invoice, contact, ...>"] [--register <register.csv>]
 """
 
@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="make_key.py", description="Make a signed licence key.")
     parser.add_argument("--private-key", required=True, help="path to the private key file")
     parser.add_argument("--holder", required=True, help="company name the licence is for")
-    parser.add_argument("--modules", required=True, help="comma list of: course, study, job, visa")
+    parser.add_argument("--modules", required=True, help="comma list of: course, study, job, visa, remote")
     parser.add_argument("--expires", help="last valid day, YYYY-MM-DD (omit for no expiry)")
     parser.add_argument("--note", default="", help="your own note for the register (invoice no., contact)")
     parser.add_argument("--register", help="register CSV file (default: licence_register.csv next to the private key)")
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
 
     modules = [m.strip() for m in args.modules.split(",") if m.strip()]
     if not modules or len(set(modules)) != len(modules) or any(m not in MODULES for m in modules):
-        parser.error("--modules must be one or more of: course, study, job, visa (no repeats)")
+        parser.error("--modules must be one or more of: course, study, job, visa, remote (no repeats)")
 
     issued = today_dhaka()
     expires: date | None = None

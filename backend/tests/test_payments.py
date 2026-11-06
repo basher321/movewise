@@ -528,3 +528,34 @@ def test_applicant_without_email_can_pay(api: FastAPI, client: TestClient, conn:
     assert conn.execute(text("SELECT email FROM invoices")).scalar_one() == ""
     # The receipt goes by WhatsApp only when there is a phone; no email row without an email.
     assert conn.execute(text("SELECT count(*) FROM notifications WHERE event = 'payment_received' AND channel = 'email'")).scalar_one() == 0
+
+
+# Self Apply: a separate self-apply fee, then the official link; no documents.
+def test_self_apply_pays_its_own_fee_then_gets_link(
+    client: TestClient, conn: Connection, world: dict[str, Any], fake: FakeGateway
+) -> None:
+    slug = world["uni"]["slug"]
+    refused = client.post("/api/me/study/applications", json={"item_slug": slug, "answers": {}, "self_apply": True})
+    assert refused.status_code == 409 and refused.json()["code"] == "CONFLICT"
+
+    uni = client.put(
+        f"/api/admin/universities/{world['uni']['id']}", json=university_body(self_apply_fee_poisha=50000)
+    ).json()
+    assert uni["self_apply_fee_poisha"] == 50000
+    assert client.get(f"/api/universities/{slug}").json()["self_apply_fee_poisha"] == 50000
+
+    app = client.post("/api/me/study/applications", json={"item_slug": slug, "answers": {}, "self_apply": True}).json()
+    assert app["self_apply"] is True and app["fee_poisha"] == 50000
+    assert "apply_link" not in app
+    doc = client.post(
+        f"/api/me/study/applications/{app['id']}/documents",
+        data={"type": "Valid passport"},
+        files={"file": ("p.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")},
+    )
+    assert doc.status_code == 409
+
+    payment = paid_by_ssl(client, conn, fake, app)
+    assert payment["amount_poisha"] == 50000 and payment["status"] == "paid"
+    assert payment["purpose"].startswith("Self-apply fee - ")
+    after = client.get(f"/api/me/study/applications/{app['id']}").json()
+    assert after["fee_paid"] is True and after["apply_link"] == "https://apply.example.test"

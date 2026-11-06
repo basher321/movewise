@@ -10,23 +10,28 @@ import {
   listAdminCourses,
   listAdminUniversities,
   listAdminVacancies,
+  listAdminRemoteJobs,
   listAdminVisaPrograms,
   saveCourse,
   saveCourseGroup,
   saveUniversity,
   saveVacancy,
+  saveRemoteJob,
   saveVisaProgram,
   VISA_TYPE_LABELS,
   VISA_TYPES,
+  REMOTE_SKILLS,
   type Course,
   type CourseGroup,
   type LicenceView,
   type Module,
+  type SuccessRate,
   type University,
   type Vacancy,
   type VisaProgram,
   type VisaType,
 } from "@/lib/api";
+import { poishaToText, takaToPoisha } from "@/lib/admin/amounts";
 import { formatMoney } from "@/lib/format";
 import { errorText } from "../auth/messages";
 import AdminTable from "./AdminTable";
@@ -35,11 +40,12 @@ import TabPage from "./TabPage";
 import { handleFailure } from "./failure";
 import type { ShowToast } from "./Toast";
 
-type Part = "uni" | "job" | "visa" | "crs";
+type Part = "uni" | "job" | "rmt" | "visa" | "crs";
 
 const PARTS: [Part, string, Module][] = [
   ["uni", "Universities", "study"],
   ["job", "Employers & vacancies", "job"],
+  ["rmt", "Remote jobs", "remote"],
   ["visa", "Visa programmes", "visa"],
   ["crs", "Courses", "course"],
 ];
@@ -60,6 +66,7 @@ const UF: FieldSpec[] = [
   { k: "work", l: "Work rights", full: true },
   { k: "conditions", l: "Other conditions", full: true },
   { k: "link", l: "Official application link (shown to the applicant after paying)", full: true, ph: "https://…" },
+  { k: "selffee", l: "Self Apply fee (৳, empty = Self Apply not offered)", ph: "e.g. 1500" },
   { k: "email", l: "Admissions email (for case emails, never shown on the website)", t: "email", full: true },
   { k: "hidden", l: "Hide from website", t: "check" },
 ];
@@ -137,6 +144,15 @@ function whole(v: string | boolean | undefined, label: string, min = 0): number 
   return Number(text);
 }
 
+// The Self Apply fee box: empty means not offered; otherwise taka above 0 (up to 2 decimals).
+function selfFee(v: string | boolean | undefined): number | null {
+  const text = str(v);
+  if (!text) return null;
+  const poisha = takaToPoisha(text);
+  if (poisha === null || poisha <= 0) throw new ApiError("VALIDATION", "Self Apply fee must be an amount in taka above 0.");
+  return poisha;
+}
+
 function decimal(v: string | boolean | undefined, label: string): number {
   const text = str(v);
   if (!/^\d+(\.\d+)?$/.test(text)) throw new ApiError("VALIDATION", label + " must be a number.");
@@ -146,6 +162,7 @@ function decimal(v: string | boolean | undefined, label: string): number {
 type Editing =
   | { part: "uni"; item: University | null }
   | { part: "job"; item: Vacancy | null }
+  | { part: "rmt"; item: Vacancy | null }
   | { part: "visa"; item: VisaProgram | null }
   | { part: "grp"; item: CourseGroup | null }
   | { part: "crs"; item: Course | null };
@@ -159,6 +176,8 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
   const shown = parts.some(([p]) => p === part) ? part : (parts[0]?.[0] ?? null);
   const [unis, setUnis] = useState<University[] | null>(null);
   const [jobs, setJobs] = useState<Vacancy[] | null>(null);
+  // Which list jobs holds (vacancies or remote jobs), so the other list never shows for a moment.
+  const [jobsPart, setJobsPart] = useState<Part | null>(null);
   const [visas, setVisas] = useState<VisaProgram[] | null>(null);
   const [groups, setGroups] = useState<CourseGroup[] | null>(null);
   const [courses, setCourses] = useState<Course[] | null>(null);
@@ -168,7 +187,11 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
   const load = useCallback(async () => {
     try {
       if (shown === "uni") setUnis(await listAdminUniversities());
-      if (shown === "job") setJobs(await listAdminVacancies());
+      // Remote Jobs: the same vacancy table and form, in the Remote Jobs module.
+      if (shown === "job" || shown === "rmt") {
+        setJobs(await (shown === "rmt" ? listAdminRemoteJobs() : listAdminVacancies()));
+        setJobsPart(shown);
+      }
       if (shown === "visa") setVisas(await listAdminVisaPrograms());
       if (shown === "crs") {
         const [g, c] = await Promise.all([listAdminCourseGroups(), listAdminCourses()]);
@@ -194,9 +217,9 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
   }
 
   const actions =
-    shown === "uni" || shown === "job" || shown === "visa" ? (
+    shown === "uni" || shown === "job" || shown === "rmt" || shown === "visa" ? (
       <button className="btn sm" type="button" onClick={() => setEditing({ part: shown, item: null })}>
-        + Add {shown === "uni" ? "university" : shown === "visa" ? "visa programme" : "vacancy"}
+        + Add {shown === "uni" ? "university" : shown === "visa" ? "visa programme" : shown === "rmt" ? "remote job" : "vacancy"}
       </button>
     ) : shown === "crs" ? (
       <>
@@ -279,16 +302,17 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
               },
               { head: "Tuition", cell: (u) => "$" + u.tuition_usd.toLocaleString("en-US") },
               { head: "Applied", cell: (u) => u.applied_count ?? 0 },
+              { head: "Success rate", cell: (u) => successCell(u.success_rate) },
               { head: "Website", cell: (u) => (u.published ? badge("Published", "bd ok") : badge("Hidden", "bd")) },
               { head: "", right: true, cell: (u) => <EditButton onClick={() => setEditing({ part: "uni", item: u })} /> },
             ]}
           />
         ) : null}
-        {shown === "job" && jobs ? (
+        {(shown === "job" || shown === "rmt") && jobs && jobsPart === shown ? (
           <AdminTable
             rows={jobs}
             rowKey={(j) => j.id}
-            empty="No vacancies yet. Add the first one with “+ Add vacancy”."
+            empty={shown === "rmt" ? "No remote jobs yet. Add the first one with “+ Add remote job”." : "No vacancies yet. Add the first one with “+ Add vacancy”."}
             columns={[
               {
                 head: "Job",
@@ -312,6 +336,7 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
               },
               { head: "Salary", cell: (j) => "$" + j.salary_usd.toLocaleString("en-US") },
               { head: "Applied / seats", cell: (j) => (j.applied_count ?? 0) + " / " + (j.seats ?? "–") },
+              { head: "Success rate", cell: (j) => successCell(j.success_rate) },
               {
                 head: "Website",
                 cell: (j) =>
@@ -326,7 +351,7 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
                     </>
                   ),
               },
-              { head: "", right: true, cell: (j) => <EditButton onClick={() => setEditing({ part: "job", item: j })} /> },
+              { head: "", right: true, cell: (j) => <EditButton onClick={() => setEditing({ part: shown === "rmt" ? "rmt" : "job", item: j })} /> },
             ]}
           />
         ) : null}
@@ -356,6 +381,7 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
               },
               { head: "Fee", cell: (p) => formatMoney(p.fee_poisha) },
               { head: "Applied", cell: (p) => p.applied_count ?? 0 },
+              { head: "Success rate", cell: (p) => successCell(p.success_rate) },
               { head: "Website", cell: (p) => (p.published ? badge("Published", "bd ok") : badge("Hidden", "bd")) },
               { head: "", right: true, cell: (p) => <EditButton onClick={() => setEditing({ part: "visa", item: p })} /> },
             ]}
@@ -416,6 +442,7 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
               intakes: str(v.intakes),
               deadline_text: str(v.deadline),
               fee_override_poisha: u?.fee_override_poisha ?? null,
+              self_apply_fee_poisha: selfFee(v.selffee),
               scholarships: str(v.scholarships),
               work_rights: str(v.work),
               conditions: str(v.conditions),
@@ -427,17 +454,18 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
           }}
         />
       ) : null}
-      {editing?.part === "job" ? (
+      {editing?.part === "job" || editing?.part === "rmt" ? (
         <FormDialog
-          title={editing.item ? "Edit vacancy" : "Add vacancy"}
-          fields={JF}
+          title={editing.part === "rmt" ? (editing.item ? "Edit remote job" : "Add remote job") : editing.item ? "Edit vacancy" : "Add vacancy"}
+          fields={editing.part === "rmt" ? remoteFields(editing.item) : JF}
           wide
-          initial={vacancyValues(editing.item)}
+          initial={editing.part === "rmt" ? remoteValues(editing.item) : vacancyValues(editing.item)}
           onClose={() => setEditing(null)}
           onSignedOut={onSignedOut}
           onSave={async (v) => {
             const j = editing.item;
-            await saveVacancy(j?.id ?? null, {
+            const remote = editing.part === "rmt";
+            await (remote ? saveRemoteJob : saveVacancy)(j?.id ?? null, {
               title: str(v.title),
               employer: str(v.employer),
               country: str(v.country),
@@ -457,7 +485,7 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
               employer_verified: v.verified === true,
               closed: v.closed === true,
             });
-            saved(j ? "Vacancy saved." : "Vacancy added.");
+            saved(remote ? (j ? "Remote job saved." : "Remote job added.") : j ? "Vacancy saved." : "Vacancy added.");
           }}
         />
       ) : null}
@@ -547,6 +575,19 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
   );
 }
 
+// Finished journeys (Completed or Rejected), counted automatically from the cases.
+function successCell(rate: SuccessRate | null) {
+  if (!rate) return <small>No finished cases yet</small>;
+  return (
+    <>
+      {rate.percent}%
+      <small>
+        {rate.completed} of {rate.finished} finished
+      </small>
+    </>
+  );
+}
+
 function EditButton({ onClick }: { onClick: () => void }) {
   return (
     <button className="lk" type="button" onClick={onClick}>
@@ -572,9 +613,25 @@ function universityValues(u: University | null): FormValues {
     work: u.work_rights,
     conditions: u.conditions,
     link: u.apply_link ?? "",
+    selffee: u.self_apply_fee_poisha === null ? "" : poishaToText(u.self_apply_fee_poisha),
     email: u.admissions_email ?? "",
     hidden: u.published === false,
   };
+}
+
+// Remote Jobs: the vacancy form with the skill chosen from the Remote Jobs agent's list, so the
+// role matches what applicants pick. A skill saved earlier that is not in the list stays a choice.
+function remoteFields(j: Vacancy | null): FieldSpec[] {
+  const skills: string[] = [...REMOTE_SKILLS];
+  if (j && !skills.includes(j.occupation)) skills.push(j.occupation);
+  return JF.map((f) =>
+    f.k === "occupation" ? { k: "occupation", l: "Skill / role (as in the Remote Jobs agent)", t: "select", req: true, o: skills.map((s) => [s, s]) } : f,
+  );
+}
+
+function remoteValues(j: Vacancy | null): FormValues {
+  const values = vacancyValues(j);
+  return j ? values : { ...values, occupation: REMOTE_SKILLS[0] };
 }
 
 // A new vacancy starts as in the reference: employer not verified until checked, education 1,

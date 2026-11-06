@@ -24,8 +24,9 @@ import { get, patch, post, request } from "./client";
 
 // ---------- the applicant's own applications ----------
 
-export const startApplication = (module: AppModule, itemSlug: string, answers: Answers) =>
-  post<MyApplication>(`/me/${module}/applications`, { item_slug: itemSlug, answers });
+// selfApply: a Self Apply record (universities only) that pays the self-apply fee for the official link.
+export const startApplication = (module: AppModule, itemSlug: string, answers: Answers, selfApply = false) =>
+  post<MyApplication>(`/me/${module}/applications`, { item_slug: itemSlug, answers, ...(selfApply ? { self_apply: true } : {}) });
 
 export const myApplications = (module: AppModule) => get<MyApplicationSummary[]>(`/me/${module}/applications`);
 
@@ -49,6 +50,10 @@ export function uploadDocument(module: AppModule, appId: string, type: string, f
   form.append("file", file, file.name);
   return request<AppDocument>("POST", `/me/${module}/applications/${appId}/documents`, { form });
 }
+
+// Sends every required document to review together; a case at its first stage moves to the next.
+export const submitDocuments = (module: AppModule, appId: string) =>
+  post<MyApplication>(`/me/${module}/applications/${appId}/documents/submit`);
 
 // ---------- staff: case handling (section of the module) ----------
 

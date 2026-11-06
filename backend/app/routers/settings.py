@@ -80,6 +80,7 @@ FIELD_PATHS: dict[str, str] = {
     "default_fee_study_poisha": "default_fee_poisha.study",
     "default_fee_job_poisha": "default_fee_poisha.job",
     "default_fee_visa_poisha": "default_fee_poisha.visa",
+    "default_fee_remote_poisha": "default_fee_poisha.remote",
     "sslcommerz_enabled": "gateways.sslcommerz.enabled",
     "sslcommerz_sandbox": "gateways.sslcommerz.sandbox",
     "bkash_enabled": "gateways.bkash.enabled",
@@ -190,6 +191,8 @@ class FeesIn(BaseModel):
     job: StrictInt
     # B19: optional, so a client that does not know Immigration yet keeps the saved fee.
     visa: StrictInt | None = None
+    # Remote Jobs: optional too, for the same reason.
+    remote: StrictInt | None = None
 
 
 class AiProviderIn(BaseModel):
@@ -257,6 +260,7 @@ def _columns(body: SettingsIn) -> dict[str, Any]:
         "default_fee_study_poisha": body.default_fee_poisha.study,
         "default_fee_job_poisha": body.default_fee_poisha.job,
         "default_fee_visa_poisha": body.default_fee_poisha.visa,
+        "default_fee_remote_poisha": body.default_fee_poisha.remote,
         "sslcommerz_enabled": gw.sslcommerz.enabled,
         "sslcommerz_sandbox": gw.sslcommerz.sandbox,
         "bkash_enabled": gw.bkash.enabled,
@@ -333,7 +337,12 @@ def _validate(body: SettingsIn, available_secrets: set[str]) -> None:
     if not API_VERSION_RE.fullmatch(wa.api_version.strip()):
         raise _invalid("WhatsApp API version must look like v21.0.")
     fees = body.default_fee_poisha
-    if fees.study <= 0 or fees.job <= 0 or (fees.visa is not None and fees.visa <= 0):
+    if (
+        fees.study <= 0
+        or fees.job <= 0
+        or (fees.visa is not None and fees.visa <= 0)
+        or (fees.remote is not None and fees.remote <= 0)
+    ):
         raise _invalid("Default fees must be whole numbers of poisha above 0.")
     gw = body.gateways
     if not (gw.sslcommerz.enabled or gw.bkash.enabled or gw.nagad.enabled or gw.manual.enabled):
@@ -357,7 +366,8 @@ def _validate_ai(ai: AiIn, saved_keys: set[str]) -> dict[str, Any]:
         raise _invalid("AI order must list Claude, ChatGPT, Gemini and Groq once each.")
     if set(ai.providers) != set(PROVIDERS):
         raise _invalid("AI settings must include Claude, ChatGPT, Gemini and Groq.")
-    stored: dict[str, Any] = {"order": list(ai.order), "providers": {}}
+    # The failover order is fixed (Claude, ChatGPT, Gemini, Groq), whatever order was sent.
+    stored: dict[str, Any] = {"order": list(PROVIDERS), "providers": {}}
     for p in PROVIDERS:
         item = ai.providers[p]
         model = item.model.strip()
@@ -504,6 +514,7 @@ def _public_view(row: RowMapping) -> dict[str, Any]:
             "study": row["default_fee_study_poisha"],
             "job": row["default_fee_job_poisha"],
             "visa": row["default_fee_visa_poisha"],
+            "remote": row["default_fee_remote_poisha"],
         },
         "gateways": {
             "sslcommerz": {"enabled": row["sslcommerz_enabled"], "sandbox": row["sslcommerz_sandbox"]},
@@ -577,6 +588,8 @@ async def save_settings(
     columns = _columns(body)
     if columns["default_fee_visa_poisha"] is None:
         columns["default_fee_visa_poisha"] = old["default_fee_visa_poisha"]
+    if columns["default_fee_remote_poisha"] is None:
+        columns["default_fee_remote_poisha"] = old["default_fee_remote_poisha"]
     conn.execute(_UPDATE_SETTINGS, columns)
     for name, value in sent.items():
         save_secret(conn, name, value)

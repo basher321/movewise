@@ -57,8 +57,8 @@ def _invalid(message: str) -> ApiError:
 
 
 def _module_param(module: str | None) -> AppModule:
-    if module not in ("study", "job", "visa"):
-        raise _invalid("Please choose a module: study, job or visa.")
+    if module not in ("study", "job", "visa", "remote"):
+        raise _invalid("Please choose a module: study, job, visa or remote.")
     return cast(AppModule, module)
 
 
@@ -468,7 +468,7 @@ async def send_case_email(
         address = provider_email(module, item)
         if not address:
             raise _invalid(f"No email on file for the {PROVIDER_LABEL[module]}.")
-        name = item["employer"] if module == "job" else item_title(module, item)
+        name = item["employer"] if module in ("job", "remote") else item_title(module, item)
         queue_message(conn, name, address, None, module, "case_email", subject, message, app["id"])
         who = PROVIDER_LABEL[module]
     add_event(conn, app["id"], actor, f"Email sent to {who}: {subject}", public=False)

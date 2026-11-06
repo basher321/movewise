@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AI_LABELS } from "@/lib/admin/settingsForm";
-import { isApiError, testAiProvider, type AiProvider, type AiSettingsInput, type Settings } from "@/lib/api";
+import { AI_PROVIDERS, isApiError, testAiProvider, type AiProvider, type AiSettingsInput, type Settings } from "@/lib/api";
 import { CheckField, TextField } from "./Field";
 
 const SAVED_KEY = "Saved - leave empty to keep";
@@ -15,21 +15,16 @@ const MODEL_HINT: Record<AiProvider, string> = {
 
 type Props = { ai: AiSettingsInput; stored: Settings; onChange: (ai: AiSettingsInput) => void };
 
-// B17: the AI providers in failover order: switch, model, API key, test, and up / down.
+// B17: the AI providers in their fixed failover order (Claude, ChatGPT, Gemini, Groq): switch, model,
+// API key and test.
 export default function AiProviders({ ai, stored, onChange }: Props) {
   const [results, setResults] = useState<Partial<Record<AiProvider, { ok: boolean; text: string }>>>({});
   const [busy, setBusy] = useState<AiProvider | null>(null);
 
-  const copy = (): AiSettingsInput => ({ order: [...ai.order], providers: { ...ai.providers } });
+  const copy = (): AiSettingsInput => ({ order: [...AI_PROVIDERS], providers: { ...ai.providers } });
   const set = (p: AiProvider, change: Partial<AiSettingsInput["providers"][AiProvider]>) => {
     const next = copy();
     next.providers[p] = { ...next.providers[p], ...change };
-    onChange(next);
-  };
-  const move = (i: number, by: -1 | 1) => {
-    const next = copy();
-    const j = i + by;
-    [next.order[i], next.order[j]] = [next.order[j], next.order[i]];
     onChange(next);
   };
 
@@ -48,7 +43,7 @@ export default function AiProviders({ ai, stored, onChange }: Props) {
 
   return (
     <>
-      {ai.order.map((p, i) => {
+      {AI_PROVIDERS.map((p, i) => {
         const item = ai.providers[p];
         const saved = stored.ai.providers[p].key.saved;
         const result = results[p];
@@ -58,14 +53,6 @@ export default function AiProviders({ ai, stored, onChange }: Props) {
               <h4 style={{ margin: 0 }}>
                 {i + 1}. {AI_LABELS[p]} {saved ? <span className="bd ok">Key saved</span> : null}
               </h4>
-              <span className="cr" style={{ margin: 0 }}>
-                <button className="btn ghost sm" type="button" disabled={i === 0} aria-label={"Move " + AI_LABELS[p] + " up"} onClick={() => move(i, -1)}>
-                  ↑
-                </button>
-                <button className="btn ghost sm" type="button" disabled={i === ai.order.length - 1} aria-label={"Move " + AI_LABELS[p] + " down"} onClick={() => move(i, 1)}>
-                  ↓
-                </button>
-              </span>
             </div>
             <div className="fgrid" style={{ marginTop: 10, marginBottom: 0 }}>
               <CheckField label={"Use " + AI_LABELS[p]} checked={item.enabled} onChange={(v) => set(p, { enabled: v })} />

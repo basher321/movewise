@@ -15,10 +15,22 @@ type FeeDialogProps = {
   phone: string;
   onClose: () => void;
   onDone: (payment: PayStart) => void;
+  // Self Apply shows its own fee name; the application fee is the default.
+  feeName?: string;
 };
 
 // The "Application fee" dialog (#fee and openFee() in the reference) with the shared checkout.
-export default function FeeDialog({ module, applicationId, itemName, country, fee_poisha, phone: initialPhone, onClose, onDone }: FeeDialogProps) {
+export default function FeeDialog({
+  module,
+  applicationId,
+  itemName,
+  country,
+  fee_poisha,
+  phone: initialPhone,
+  onClose,
+  onDone,
+  feeName,
+}: FeeDialogProps) {
   const [phone, setPhone] = useState(initialPhone);
 
   // The api checks the mobile number and the payment rules.
@@ -27,14 +39,14 @@ export default function FeeDialog({ module, applicationId, itemName, country, fe
   }
 
   return (
-    <Modal open title="Application fee" onClose={onClose}>
+    <Modal open title={feeName ?? "Application fee"} onClose={onClose}>
       <p className="sub">
         {itemName} · {COUNTRY_FLAGS[country] ? COUNTRY_FLAGS[country] + " " : ""}
         {country}
       </p>
       <div className="card" style={{ marginBottom: 16, padding: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-          <span style={{ color: "var(--muted)", fontWeight: 600 }}>Application processing fee</span>
+          <span style={{ color: "var(--muted)", fontWeight: 600 }}>{feeName ?? "Application processing fee"}</span>
           <b style={{ font: "700 26px var(--font-sora)" }}>{formatMoney(fee_poisha)}</b>
         </div>
       </div>
@@ -48,7 +60,7 @@ export default function FeeDialog({ module, applicationId, itemName, country, fe
         autoComplete="tel"
         style={{ marginBottom: 14 }}
       />
-      <PaymentCheckout amount_poisha={fee_poisha} purpose={"Application fee: " + itemName} onPay={pay} onDone={onDone} />
+      <PaymentCheckout amount_poisha={fee_poisha} purpose={(feeName ?? "Application fee") + ": " + itemName} onPay={pay} onDone={onDone} />
     </Modal>
   );
 }
