@@ -18,6 +18,7 @@ import CoursesTab from "./CoursesTab";
 import DocumentsTab from "./DocumentsTab";
 import EnquiriesTab from "./EnquiriesTab";
 import FeesTab from "./FeesTab";
+import ImportTab from "./ImportTab";
 import LicenceTab from "./LicenceTab";
 import MyAccountDialog from "./MyAccountDialog";
 import NotificationsTab from "./NotificationsTab";
@@ -127,6 +128,8 @@ export function Panel({
           <AgentsTab admin={admin} licence={licence} toast={toast} onSignedOut={onSignedOut} />
         ) : tab === "partners" ? (
           <PartnersTab admin={admin} licence={licence} toast={toast} onSignedOut={onSignedOut} />
+        ) : tab === "import" ? (
+          <ImportTab admin={admin} licence={licence} toast={toast} onSignedOut={onSignedOut} />
         ) : tab === "acc" ? (
           <AccountsTab admin={admin} toast={toast} onSignedOut={onSignedOut} />
         ) : tab === "set" ? (

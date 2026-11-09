@@ -184,6 +184,9 @@ export {
   MAX_PARTY_DOCUMENT_BYTES,
 } from "./http/partyDocuments";
 
+// Excel upload of listings (B23)
+export { previewImport, commitImport, downloadImportTemplate, MAX_IMPORT_BYTES } from "./http/imports";
+
 // certificates, completion letters and client messages (B20)
 export {
   getEnrolmentCertificate,

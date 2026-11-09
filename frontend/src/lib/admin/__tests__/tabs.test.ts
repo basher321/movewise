@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdminUser, LicenceView } from "../../api";
-import { allowedTabs, resolveTab } from "../tabs";
+import { allowedImportKinds, allowedTabs, resolveTab } from "../tabs";
 
 const ALL: LicenceView = { holder: "Test", expires_at: null, active: true, modules: { course: true, study: true, job: true, visa: true, remote: true } };
 const STUDY_ONLY: LicenceView = { holder: "Test", expires_at: null, active: true, modules: { course: false, study: true, job: false, visa: false, remote: false } };
@@ -20,12 +20,12 @@ const ids = (admin: AdminUser, licence: LicenceView) => allowedTabs(admin, licen
 
 describe("admin tabs", () => {
   it("super_admin sees every tab, ending with Settings and Licence", () => {
-    expect(ids(user("super_admin"), ALL)).toEqual(["course", "study", "job", "visa", "remote", "enq", "docs", "agents", "partners", "acc", "cat", "fees", "notifs", "team", "audit", "set", "lic"]);
+    expect(ids(user("super_admin"), ALL)).toEqual(["course", "study", "job", "visa", "remote", "enq", "docs", "agents", "partners", "import", "acc", "cat", "fees", "notifs", "team", "audit", "set", "lic"]);
   });
 
   it("admin sees only assigned licensed modules, then Enquiries, Documents, Notifications", () => {
-    expect(ids(user("admin", ["study", "job"]), ALL)).toEqual(["study", "job", "enq", "docs", "agents", "partners", "notifs"]);
-    expect(ids(user("admin", ["study", "job"]), STUDY_ONLY)).toEqual(["study", "enq", "docs", "agents", "partners", "notifs"]);
+    expect(ids(user("admin", ["study", "job"]), ALL)).toEqual(["study", "job", "enq", "docs", "agents", "partners", "import", "notifs"]);
+    expect(ids(user("admin", ["study", "job"]), STUDY_ONLY)).toEqual(["study", "enq", "docs", "agents", "partners", "import", "notifs"]);
   });
 
   it("B16: the Agents tab needs a licensed study or job section", () => {
@@ -68,10 +68,26 @@ describe("admin tabs", () => {
 
 describe("B19 immigration tab", () => {
   it("an admin of the visa section sees Immigration, Agents and Partners", () => {
-    expect(ids(user("admin", ["visa"]), ALL)).toEqual(["visa", "enq", "docs", "agents", "partners", "notifs"]);
+    expect(ids(user("admin", ["visa"]), ALL)).toEqual(["visa", "enq", "docs", "agents", "partners", "import", "notifs"]);
   });
 
   it("is hidden when visa is not licensed", () => {
     expect(ids(user("admin", ["visa"]), STUDY_ONLY)).not.toContain("visa");
+  });
+});
+
+describe("B23 Excel upload tab", () => {
+  it("offers only the types of the person's licensed sections", () => {
+    expect(allowedImportKinds(user("super_admin"), ALL)).toEqual(["university", "vacancy", "visa"]);
+    expect(allowedImportKinds(user("super_admin"), STUDY_ONLY)).toEqual(["university"]);
+    expect(allowedImportKinds(user("admin", ["job", "visa"]), ALL)).toEqual(["vacancy", "visa"]);
+    expect(allowedImportKinds(user("admin", ["job"]), STUDY_ONLY)).toEqual([]);
+  });
+
+  it("is hidden when there is nothing to upload", () => {
+    expect(ids(user("admin", ["course"]), ALL)).not.toContain("import");
+    expect(ids(user("admin", ["remote"]), ALL)).not.toContain("import");
+    expect(ids(user("admin", ["job"]), STUDY_ONLY)).not.toContain("import");
+    expect(ids(user("finance", ["study"]), ALL)).not.toContain("import");
   });
 });

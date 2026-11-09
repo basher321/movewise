@@ -1375,3 +1375,28 @@ export interface PartyDocumentInput {
   note: string;
   file: File;
 }
+
+// B23: Excel upload of listings.
+export const IMPORT_KINDS = ["university", "vacancy", "visa"] as const;
+export type ImportKind = (typeof IMPORT_KINDS)[number];
+
+export const IMPORT_KIND_MODULE = { university: "study", vacancy: "job", visa: "visa" } as const satisfies Record<ImportKind, Module>;
+
+export type ImportRowStatus = "new" | "skipped" | "error";
+
+export interface ImportRow {
+  row_number: number;
+  label: string;
+  status: ImportRowStatus;
+  message: string;
+  warnings: string[];
+}
+
+export interface ImportReport {
+  kind: ImportKind;
+  total: number;
+  new_count: number;
+  skipped_count: number;
+  error_count: number;
+  rows: ImportRow[];
+}

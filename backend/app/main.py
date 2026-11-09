@@ -20,6 +20,7 @@ from app.notify.worker import run_forever
 from app.production import check_production
 from app.routers import admin_applications as admin_applications_router
 from app.routers import agents as agents_router
+from app.routers import imports as imports_router
 from app.routers import partners as partners_router
 from app.routers import party_documents as party_documents_router
 from app.routers import admin_me as admin_me_router
@@ -50,6 +51,10 @@ TOO_LARGE_MESSAGE = "Request body is larger than 3 MB."
 DOCUMENT_UPLOAD_PATH = re.compile(r"/api/admin/(agents|partners)/[^/]+/documents")
 DOCUMENT_UPLOAD_MAX_BODY = 11 * 1024 * 1024
 DOCUMENT_UPLOAD_TOO_LARGE = "The file must be 10 MB or smaller."
+# B23: an Excel upload may be up to 5 MB; 1 MB more for the form around it.
+EXCEL_IMPORT_PATH = re.compile(r"/api/admin/import/[^/]+/(preview|commit)")
+EXCEL_IMPORT_MAX_BODY = 6 * 1024 * 1024
+EXCEL_IMPORT_TOO_LARGE = "The file must be 5 MB or smaller."
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # Payment gateway callbacks come from the gateway's own site (B07). They change nothing on their
 # own: every success is checked with the gateway by the server first.
@@ -57,9 +62,12 @@ ORIGIN_EXEMPT_PREFIX = "/api/pay/"
 
 
 def body_limit(method: str, path: str) -> tuple[int, str]:
-    """The largest request body allowed: 3 MB, except an agent or partner document upload (B21)."""
+    """The largest request body allowed: 3 MB, except an agent or partner document upload (B21)
+    and an Excel upload (B23)."""
     if method == "POST" and DOCUMENT_UPLOAD_PATH.fullmatch(path):
         return DOCUMENT_UPLOAD_MAX_BODY, DOCUMENT_UPLOAD_TOO_LARGE
+    if method == "POST" and EXCEL_IMPORT_PATH.fullmatch(path):
+        return EXCEL_IMPORT_MAX_BODY, EXCEL_IMPORT_TOO_LARGE
     return MAX_BODY_BYTES, TOO_LARGE_MESSAGE
 
 
@@ -186,6 +194,7 @@ def create_app() -> FastAPI:
     app.include_router(agents_router.router, prefix="/api")
     app.include_router(partners_router.router, prefix="/api")
     app.include_router(party_documents_router.router, prefix="/api")
+    app.include_router(imports_router.router, prefix="/api")
     app.include_router(documents_router.router, prefix="/api")
     app.include_router(pay_router.router, prefix="/api")
     app.include_router(finance_router.router, prefix="/api")

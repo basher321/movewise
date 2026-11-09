@@ -1,8 +1,8 @@
 // Admin panel tabs: which tabs a person may open. Labels and icons from allowedTabs() in the reference.
 
-import { MODULES, type AdminRole, type AdminUser, type LicenceView, type Module } from "../api";
+import { IMPORT_KIND_MODULE, IMPORT_KINDS, MODULES, type AdminRole, type AdminUser, type ImportKind, type LicenceView, type Module } from "../api";
 
-export type TabId = Module | "enq" | "docs" | "agents" | "partners" | "acc" | "cat" | "fees" | "notifs" | "team" | "audit" | "set" | "lic";
+export type TabId = Module | "enq" | "docs" | "agents" | "partners" | "import" | "acc" | "cat" | "fees" | "notifs" | "team" | "audit" | "set" | "lic";
 
 export interface Tab {
   id: TabId;
@@ -27,6 +27,14 @@ export function isModuleTab(id: string): id is Module {
   return (MODULES as readonly string[]).includes(id);
 }
 
+// B23: the Excel upload types of the licensed modules this person works in.
+export function allowedImportKinds(admin: AdminUser, licence: LicenceView): ImportKind[] {
+  return IMPORT_KINDS.filter((kind) => {
+    const section = IMPORT_KIND_MODULE[kind];
+    return licence.modules[section] && (admin.role === "super_admin" || (admin.role === "admin" && admin.sections.includes(section)));
+  });
+}
+
 export function allowedTabs(admin: AdminUser, licence: LicenceView): Tab[] {
   const r = admin.role;
   const tabs: Tab[] = [];
@@ -41,6 +49,7 @@ export function allowedTabs(admin: AdminUser, licence: LicenceView): Tab[] {
   // B18: B2B partners and logos, in any licensed module this person works in.
   const partnerModules = MODULES.filter((m) => licence.modules[m] && (r === "super_admin" || (r === "admin" && admin.sections.includes(m))));
   if (partnerModules.length) tabs.push({ id: "partners", label: "🏢 Partners" });
+  if (allowedImportKinds(admin, licence).length) tabs.push({ id: "import", label: "📥 Excel upload" });
   if (r === "super_admin" || r === "finance") tabs.push({ id: "acc", label: "💳 Accounts" });
   if (r === "super_admin") tabs.push({ id: "cat", label: "🗂 Catalog" }, { id: "fees", label: "Fees" });
   tabs.push({ id: "notifs", label: "🔔 Notifications" });
