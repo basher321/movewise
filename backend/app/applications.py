@@ -23,7 +23,7 @@ MAX_ANSWERS_BYTES = 4096
 APPLY_LOCK = 3_000_005
 
 ANSWER_TYPES: dict[AppModule, dict[str, str]] = {
-    "study": {"level": "text", "field": "text", "gpa": "number", "ielts": "number", "budget_usd": "number"},
+    "study": {"level": "text", "field": "text", "gpa": "number", "ielts": "number", "budget_usd": "number", "country": "text"},
     "job": {
         "occupation": "text",
         "country": "text",

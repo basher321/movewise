@@ -102,6 +102,7 @@ class StudyIn(BaseModel):
     gpa: float
     ielts: float = 0
     budget_usd: float
+    country: str = Field(default="", max_length=120)
 
 
 class JobIn(BaseModel):
@@ -243,7 +244,7 @@ async def post_match_visa(request: Request, conn: Connection = Depends(get_conn)
 @router.post("/match/study", dependencies=[Depends(require_module("study"))])
 async def post_match_study(request: Request, conn: Connection = Depends(get_conn)) -> list[dict[str, Any]]:
     body = parse_body(StudyIn, await request.body())
-    data = check_study(StudyInput(body.level, body.field, body.gpa, body.ielts, body.budget_usd))
+    data = check_study(StudyInput(body.level, body.field, body.gpa, body.ielts, body.budget_usd, body.country))
     return match_study(conn, data)
 
 
@@ -312,6 +313,8 @@ def catalog_options(conn: Connection = Depends(get_conn)) -> dict[str, list[str]
     return {
         "study_levels": _merged(tuple(used_levels), levels) if study else [],
         "study_fields": sorted({f for u in universities for f in u["fields"]}),
+        # Only the countries that have a published university.
+        "study_countries": [ANY_COUNTRY, *sorted({u["country"] for u in universities}, key=str.casefold)] if study else [],
         "occupations": sorted({v["occupation"] for v in vacancies}),
         # Every country (plus any other country a vacancy uses), so applicants can pick any destination.
         "countries": [ANY_COUNTRY, *sorted(set(WORLD_COUNTRIES) | {v["country"] for v in vacancies}, key=str.casefold)] if job else [],

@@ -48,6 +48,7 @@ class StudyInput:
     gpa: float
     ielts: float
     budget_usd: float
+    country: str = ""
 
 
 @dataclass(frozen=True)
@@ -182,8 +183,11 @@ def match_visa(conn: Connection, data: VisaInput) -> list[dict[str, Any]]:
 def match_study(conn: Connection, data: StudyInput) -> list[dict[str, Any]]:
     fee = default_fees(conn)["study"]
     level, field = data.level.strip(), data.field.strip()
+    country = data.country.strip()
     results = []
     for u in public_universities(conn):
+        if country and country != ANY_COUNTRY and u["country"] != country:
+            continue
         if level not in u["levels"] or field not in u["fields"]:
             continue
         gpa, ielts = number_text(u["min_gpa"]), number_text(u["min_ielts"])
@@ -328,6 +332,7 @@ def _agent_matches(conn: Connection, module: AgentModule, inputs: dict[str, Any]
                         gpa=_number(inputs.get("gpa")),
                         ielts=_number(inputs.get("ielts", 0)),
                         budget_usd=_number(inputs.get("budget_usd")),
+                        country=str(inputs.get("country", "")),
                     )
                 ),
             )

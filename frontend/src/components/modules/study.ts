@@ -16,6 +16,7 @@ export const studyConfig: ModuleConfig = {
     fields: [
       { key: "level", label: "Study level", optionsFrom: "study_levels" },
       { key: "field", label: "Field of study", optionsFrom: "study_fields" },
+      { key: "country", label: "Preferred country", optionsFrom: "study_countries" },
       { key: "gpa", label: "GPA (4.0 scale)", min: 0, max: 4, step: 0.01, placeholder: "5.0 GPA × 0.8", required: true },
       { key: "ielts", label: "IELTS band (0 if none)", min: 0, max: 9, step: 0.5, placeholder: "e.g. 6.5", empty: 0 },
       { key: "budget_usd", label: "Budget per year (USD)", min: 0, max: 100000, step: 500, placeholder: "e.g. 12000", required: true },
@@ -36,6 +37,7 @@ export const studyConfig: ModuleConfig = {
         gpa: Number(inputs.gpa),
         ielts: Number(inputs.ielts ?? 0),
         budget_usd: Number(inputs.budget_usd),
+        country: String(inputs.country ?? ""),
       })
     ).map((m) => ({ id: m.item.slug, name: m.item.name, country: m.item.country, place: m.item.city, percent: m.match_percent, checks: m.checks })),
   loadItem: async (slug) => {

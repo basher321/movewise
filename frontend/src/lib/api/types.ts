@@ -644,6 +644,7 @@ export interface VisaProgramInput {
 export interface CatalogOptions {
   study_levels: string[];
   study_fields: string[];
+  study_countries: string[];
   occupations: string[];
   countries: string[];
   education_levels: string[];
@@ -680,6 +681,7 @@ export interface MatchStudyInput {
   gpa: number;
   ielts: number;
   budget_usd: number;
+  country: string;
 }
 
 export interface MatchJobInput {

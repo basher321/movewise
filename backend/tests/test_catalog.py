@@ -226,6 +226,21 @@ def test_b36_match_study(client: TestClient, owner: None, changes: dict[str, Any
     assert "apply_link" not in result[0]["item"]
 
 
+def test_match_study_preferred_country(client: TestClient, owner: None) -> None:
+    make(client, "universities", university_body(name="In China", country="China"))
+    make(client, "universities", university_body(name="In Malaysia", country="Malaysia"))
+    make(client, "universities", university_body(name="Hidden", country="Japan", published=False))
+
+    def names(**changes: Any) -> list[str]:
+        return sorted(m["item"]["name"] for m in client.post("/api/match/study", json=study_input(**changes)).json())
+
+    assert names() == ["In China", "In Malaysia"]
+    assert names(country="Any country") == ["In China", "In Malaysia"]
+    assert names(country="China") == ["In China"]
+    assert names(country="Japan") == []
+    assert client.get("/api/catalog/options").json()["study_countries"] == ["Any country", "China", "Malaysia"]
+
+
 def test_match_study_input_and_empty(client: TestClient, owner: None) -> None:
     assert client.post("/api/match/study", json=study_input()).json() == []
     assert client.post("/api/match/study", json=study_input(gpa=5)).json()["code"] == "VALIDATION"
