@@ -36,7 +36,7 @@ export default function HomeHero() {
                 Browse courses
               </Button>
             </IfLicensed>
-            <Button variant="ghost" href="/contact">
+            <Button variant="ghost" href="/contact#book">
               Book consultation
             </Button>
           </div>

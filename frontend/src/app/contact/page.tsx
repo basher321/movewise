@@ -15,7 +15,7 @@ export default function ContactPage() {
             <p className="lead">Book a free consultation or send us a question. An advisor replies within one working day.</p>
             <ContactCard />
           </div>
-          <div className="vis">
+          <div className="vis" id="book">
             <h3>Consultation booking</h3>
             <ContactForm />
           </div>
