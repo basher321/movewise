@@ -31,11 +31,6 @@ export default function HomeHero() {
             <IfLicensed module="study">
               <Button href="/consultancy">Start your journey</Button>
             </IfLicensed>
-            <IfLicensed module="course">
-              <Button variant="ghost" href="/courses">
-                Browse courses
-              </Button>
-            </IfLicensed>
             <Button variant="ghost" href="/contact#book">
               Book consultation
             </Button>
