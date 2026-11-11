@@ -93,43 +93,47 @@ export default function AccountsMenu({ modules }: { modules: Module[] }) {
             </small>
           </div>
         </div>
-        <div className="acm-list">
-          {modules.map((m) => {
-            const ui = MODULE_UI[m];
-            const account = session?.applicants[m];
-            return (
-              <div className={account ? "ar" : "ar off"} key={m} style={{ "--m": accentColour(m, settings) } as CSSProperties}>
-                <span className="mi" aria-hidden="true">
-                  {ui.icon}
-                </span>
-                {account ? (
-                  <>
-                    <Link className="mt" href={"/profile/" + m} onClick={close}>
-                      <b>{ui.name}</b>
-                      <small>ID {account.id}</small>
-                    </Link>
-                    <button className="ib" type="button" title={"Sign out of " + ui.name} aria-label={"Sign out of " + ui.name} onClick={() => void leave(m)}>
-                      <Icon d={LOGOUT} />
-                    </button>
-                  </>
-                ) : (
-                  <div className="mt">
-                    <b>{ui.name}</b>
-                    <small>
-                      <a href="#" onClick={(e) => auth(e, "in", m)}>
-                        Sign in
-                      </a>
-                      {" · "}
-                      <a href="#" onClick={(e) => auth(e, "up", m)}>
-                        Sign up
-                      </a>
-                    </small>
+        {[modules.filter((m) => session?.applicants[m]), modules.filter((m) => !session?.applicants[m])].map((group, g) =>
+          group.length === 0 ? null : (
+            <div className="acm-list" key={g}>
+              <p className="acm-h">{g === 0 ? "Signed in" : "Other sections"}</p>
+              {group.map((m) => {
+                const ui = MODULE_UI[m];
+                const account = session?.applicants[m];
+                return (
+                  <div className={account ? "ar" : "ar off"} key={m} style={{ "--m": accentColour(m, settings) } as CSSProperties}>
+                    <span className="mi" aria-hidden="true">
+                      {ui.icon}
+                    </span>
+                    {account ? (
+                      <>
+                        <Link className="mt" href={"/profile/" + m} onClick={close}>
+                          <b>{ui.name}</b>
+                          <small>ID {account.id}</small>
+                        </Link>
+                        <button className="ib" type="button" title={"Sign out of " + ui.name} aria-label={"Sign out of " + ui.name} onClick={() => void leave(m)}>
+                          <Icon d={LOGOUT} />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="mt">
+                        <b>{ui.name}</b>
+                        <span className="acts">
+                          <a href="#" className="in" onClick={(e) => auth(e, "in", m)}>
+                            Sign in
+                          </a>
+                          <a href="#" className="up" onClick={(e) => auth(e, "up", m)}>
+                            Sign up
+                          </a>
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          ),
+        )}
         <button className="acm-out" type="button" onClick={() => void leaveAll()}>
           <Icon d={LOGOUT} />
           Sign out
