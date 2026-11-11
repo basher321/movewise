@@ -36,6 +36,9 @@ export default function HomeHero() {
                 Browse courses
               </Button>
             </IfLicensed>
+            <Button variant="ghost" href="/contact">
+              Book consultation
+            </Button>
           </div>
           <div className="stats">
             {(settings?.stats ?? [])
