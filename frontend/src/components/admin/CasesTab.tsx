@@ -18,6 +18,7 @@ import {
   resendNotification,
   sendCaseEmail,
   sendCaseLetter,
+  setCaseFee,
   updateCase,
   type AdminUser,
   type AppDocument,
@@ -361,6 +362,8 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
   const [result, setResult] = useState<InterviewResult>(r.interview_result);
   const [salary, setSalary] = useState(r.offered_salary_usd ? String(r.offered_salary_usd) : "");
   const [reason, setReason] = useState("");
+  const [fee, setFee] = useState(r.case_fee_poisha !== null ? String(r.case_fee_poisha / 100) : "");
+  const [feeError, setFeeError] = useState("");
   const [caseError, setCaseError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -402,6 +405,29 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
     } catch (err) {
       if (isApiError(err) && err.code === "UNAUTHENTICATED") onSignedOut();
       else setCaseError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // The fee for this case only. Whole taka above 0; empty or the item's fee means the item's fee.
+  async function saveFee(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (busy) return;
+    const s = fee.trim();
+    if (s && (!/^\d+$/.test(s) || Number(s) <= 0)) return setFeeError("The fee must be a whole number of taka above 0.");
+    const poisha = s ? Number(s) * 100 : null;
+    const next = poisha === null || poisha === r.item_fee_poisha ? null : poisha;
+    if (next === r.fee_override_poisha) return setFeeError("Nothing changed.");
+    setBusy(true);
+    try {
+      await setCaseFee(r.id, next);
+      setFeeError("");
+      toast("Fee saved.");
+      onChanged();
+    } catch (err) {
+      if (isApiError(err) && err.code === "UNAUTHENTICATED") onSignedOut();
+      else setFeeError(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -518,6 +544,53 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
             </small>
           ))}
         </details>
+      ) : null}
+
+      {admin.role === "super_admin" ? (
+        <form noValidate onSubmit={(e) => void saveFee(e)} style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 14 }}>
+          <div className="fgrid">
+            <label className="fl">
+              <span>{r.self_apply ? "Self-apply fee for this case (৳)" : "Application fee for this case (৳)"}</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={fee}
+                disabled={r.fee_locked}
+                onChange={(e) => setFee(e.target.value)}
+                placeholder={r.item_fee_poisha !== null ? String(r.item_fee_poisha / 100) : ""}
+              />
+            </label>
+          </div>
+          <small style={{ display: "block", color: "var(--muted)" }}>
+            {r.fee_locked
+              ? "Paid or payment started: this fee can no longer change."
+              : "Item fee: " +
+                (r.item_fee_poisha !== null ? formatMoney(r.item_fee_poisha) : "not set") +
+                (r.fee_override_poisha !== null ? " · this case has its own fee" : "") +
+                ". The applicant sees and pays this amount."}
+          </small>
+          <p className="err" role="alert">
+            {feeError}
+          </p>
+          {r.fee_locked ? null : (
+            <div className="cr" style={{ marginTop: 0 }}>
+              <button className="btn sm" type="submit" disabled={busy}>
+                Save fee
+              </button>
+              {r.fee_override_poisha !== null ? (
+                <button
+                  className="btn ghost sm"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setFee(r.item_fee_poisha !== null ? String(r.item_fee_poisha / 100) : "")}
+                >
+                  Use item fee
+                </button>
+              ) : null}
+            </div>
+          )}
+        </form>
       ) : null}
 
       <form noValidate onSubmit={(e) => void saveCase(e)} style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 14 }}>

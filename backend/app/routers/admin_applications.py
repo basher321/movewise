@@ -19,6 +19,7 @@ from app.applications import (
     STATUS_LABELS,
     add_event,
     base_view,
+    money_text,
     dhaka_text,
     event_view,
     interview_fields,
@@ -32,6 +33,7 @@ from app.applications import (
     stages_list,
 )
 from app.audit import Actor, write_audit
+from app.catalog import check_fee, default_fees, effective_fee
 from app.auth.deps import ensure_section, get_current_actor
 from app.auth.passwords import hash_password
 from app.auth.sessions import end_applicant_sessions
@@ -70,7 +72,9 @@ _SELECT = (
     "COALESCE(u.country, v.country, vp.country) AS item_country, COALESCE(u.slug, v.slug, vp.slug) AS item_slug, "
     "COALESCE(u.admissions_email, v.employer_email, vp.embassy_email) AS provider_email, "
     "s.name AS assigned_name, s.active AS assigned_active, "
-    "g.name AS agent_name, g.active AS agent_active "
+    "g.name AS agent_name, g.active AS agent_active, "
+    "COALESCE(u.fee_override_poisha, v.fee_override_poisha, vp.fee_override_poisha) AS item_fee_override, "
+    "u.self_apply_fee_poisha AS item_self_apply_fee "
     "FROM applications a "
     "JOIN applicant_accounts p ON p.id = a.applicant_id "
     "LEFT JOIN universities u ON u.id = a.university_id "
@@ -86,6 +90,20 @@ _EMAILS = text(
     "SELECT id, application_id, at, channel, to_address, subject, status FROM notifications "
     "WHERE application_id IN :ids ORDER BY at DESC, id DESC"
 ).bindparams(bindparam("ids", expanding=True))
+
+
+_LIVE_PAYMENTS = text(
+    "SELECT ref_id FROM payments WHERE ref_type = 'application' AND ref_id IN :ids "
+    "AND status IN ('initiated', 'pending_verify', 'paid')"
+).bindparams(bindparam("ids", expanding=True))
+
+
+def _item_fee(r: RowMapping, default: int) -> int | None:
+    """The fee of the case's item: the self-apply fee for Self Apply (None while it is not
+    offered), otherwise the item's application fee."""
+    if r["self_apply"]:
+        return int(r["item_self_apply_fee"]) if r["item_self_apply_fee"] is not None else None
+    return effective_fee(r["item_fee_override"], default)
 
 
 def _rows_view(conn: Connection, rows: list[RowMapping]) -> list[dict[str, Any]]:
@@ -118,10 +136,20 @@ def _rows_view(conn: Connection, rows: list[RowMapping]) -> list[dict[str, Any]]
             {"ids": ids},
         )
     }
+    # The fee of each case cannot change once it is paid or a payment has started.
+    started = {
+        row.ref_id
+        for row in conn.execute(_LIVE_PAYMENTS, {"ids": ids})
+    }
+    defaults = default_fees(conn)
     out = []
     for r in rows:
         module: AppModule = r["module"]
         view = base_view(r)
+        view["item_fee_poisha"] = _item_fee(r, defaults[module])
+        view["fee_override_poisha"] = r["fee_override_poisha"]
+        view["case_fee_poisha"] = r["fee_override_poisha"] if r["fee_override_poisha"] is not None else view["item_fee_poisha"]
+        view["fee_locked"] = bool(r["fee_paid"]) or r["id"] in started
         view.update(interview_fields(r))
         view["stages"] = stages_list(module)
         view["applicant"] = {
@@ -417,6 +445,41 @@ async def patch_application(
             )
         write_audit(conn, actor, "application.updated", f"{app['ref']}: {labels}")
     return {**_one_view(conn, app["id"]), "changed": changed}
+
+
+# ---------------------------------------------------------------- case fee
+
+
+class CaseFeeIn(BaseModel):
+    # The fee for this case in poisha; null: use the fee of the item again.
+    fee_poisha: StrictInt | None
+
+
+@router.put("/admin/applications/{app_id}/fee")
+async def set_case_fee(
+    app_id: str, request: Request, actor: Actor = Depends(get_current_actor), conn: Connection = Depends(get_conn)
+) -> dict[str, Any]:
+    app = _load(conn, actor, app_id, lock=True)
+    if actor.role != "super_admin":
+        raise ApiError("FORBIDDEN", 403, "Only the super admin can change a fee.")
+    body = parse_body(CaseFeeIn, await request.body())
+    try:
+        fee = check_fee(body.fee_poisha)
+    except ApiError:
+        raise _invalid("The fee must be a whole number above 0.") from None
+    if fee is not None and fee % 100:
+        raise _invalid("The fee must be a whole number of taka.")
+    started = conn.execute(_LIVE_PAYMENTS, {"ids": [app["id"]]}).first()
+    if app["fee_paid"] or started is not None:
+        raise ApiError("CONFLICT", 409, "This fee is already paid or a payment has started, so it cannot change.")
+    if fee != app["fee_override_poisha"]:
+        conn.execute(
+            text("UPDATE applications SET fee_override_poisha = :fee WHERE id = :id"), {"fee": fee, "id": app["id"]}
+        )
+        what = f"Fee set to {money_text(fee)}" if fee is not None else "Fee set back to the item fee"
+        add_event(conn, app["id"], actor, what, public=False)
+        write_audit(conn, actor, "application.fee", f"{app['ref']}: {what}")
+    return _one_view(conn, app["id"])
 
 
 # ---------------------------------------------------------------- notes and emails

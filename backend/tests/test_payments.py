@@ -559,3 +559,44 @@ def test_self_apply_pays_its_own_fee_then_gets_link(
     assert payment["purpose"].startswith("Self-apply fee - ")
     after = client.get(f"/api/me/study/applications/{app['id']}").json()
     assert after["fee_paid"] is True and after["apply_link"] == "https://apply.example.test"
+
+
+# Case fee: the super admin sets a fee for one case before any payment starts.
+def test_case_fee_set_before_payment_only(
+    api: FastAPI, client: TestClient, conn: Connection, world: dict[str, Any], fake: FakeGateway
+) -> None:
+    app = new_app(client, world)
+    url = f"/api/admin/applications/{app['id']}/fee"
+    case = client.get(f"/api/admin/applications/{app['id']}").json()
+    assert (case["item_fee_poisha"], case["fee_override_poisha"], case["case_fee_poisha"], case["fee_locked"]) == (
+        FEE, None, FEE, False
+    )
+    for bad in (0, -100, 150050):
+        response = client.put(url, json={"fee_poisha": bad})
+        assert response.status_code == 422 and response.json()["code"] == "VALIDATION", bad
+
+    before = audit_count(conn)
+    case = client.put(url, json={"fee_poisha": 250000}).json()
+    assert (case["fee_override_poisha"], case["case_fee_poisha"]) == (250000, 250000)
+    assert audit_count(conn) == before + 1
+    assert client.get(f"/api/me/study/applications/{app['id']}").json()["fee_poisha"] == 250000
+    # The item fee changing later does not change this case.
+    client.put("/api/admin/fees", json={"study": {world["uni"]["id"]: 300000}})
+    assert client.get(f"/api/admin/applications/{app['id']}").json()["case_fee_poisha"] == 250000
+
+    staff = new_client(api)
+    sign_in_admin_on(staff, conn, "admin", ["study"])
+    assert staff.put(url, json={"fee_poisha": 1000}).json()["code"] == "FORBIDDEN"
+
+    started = pay(client, app["id"]).json()
+    assert payment_row(conn, started["payment_id"])["amount_poisha"] == 250000
+    response = client.put(url, json={"fee_poisha": 100})
+    assert response.status_code == 409 and response.json()["code"] == "CONFLICT"
+    assert client.get(f"/api/admin/applications/{app['id']}").json()["fee_locked"] is True
+
+    # Back to the item fee (null): the second university has the default fee.
+    other = new_app(client, world, name="Second University")
+    other_url = f"/api/admin/applications/{other['id']}/fee"
+    client.put(other_url, json={"fee_poisha": 50000})
+    case = client.put(other_url, json={"fee_poisha": None}).json()
+    assert (case["fee_override_poisha"], case["case_fee_poisha"]) == (None, FEE)

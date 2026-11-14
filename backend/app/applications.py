@@ -173,8 +173,10 @@ def fee_now(conn: Connection, module: AppModule, item: RowMapping) -> int:
 
 
 def app_fee(conn: Connection, app: RowMapping, item: RowMapping) -> int | None:
-    """The fee this application pays: the self-apply fee for Self Apply (None while it is not
-    offered), otherwise the application fee."""
+    """The fee this application pays: the fee staff set for this case if any, else the self-apply
+    fee for Self Apply (None while it is not offered), otherwise the application fee."""
+    if app["fee_override_poisha"] is not None:
+        return int(app["fee_override_poisha"])
     if app["self_apply"]:
         fee = item["self_apply_fee_poisha"]
         return int(fee) if fee is not None else None

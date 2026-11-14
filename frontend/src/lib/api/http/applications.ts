@@ -20,7 +20,7 @@ import type {
   PayInput,
   PayStart,
 } from "../types";
-import { get, patch, post, request } from "./client";
+import { get, patch, post, put, request } from "./client";
 
 // ---------- the applicant's own applications ----------
 
@@ -75,6 +75,10 @@ export const changeStatus = (id: string, status: AppStatus, reason: string) =>
   post<CaseRow>(`/admin/applications/${id}/status`, { status, reason });
 
 export const updateCase = (id: string, changes: CaseChanges) => patch<CaseRow>("/admin/applications/" + id, changes);
+
+// The fee for one case (super admin, before any payment starts); null: the item's fee again.
+export const setCaseFee = (id: string, feePoisha: number | null) =>
+  put<CaseRow>(`/admin/applications/${id}/fee`, { fee_poisha: feePoisha });
 
 export const addInternalNote = (id: string, note: string) => post<CaseRow>(`/admin/applications/${id}/notes`, { note });
 

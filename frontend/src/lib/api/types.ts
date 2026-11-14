@@ -866,6 +866,12 @@ export interface CaseRow extends AppBase, DocumentsPart, InterviewFields {
   letter: { id: string; issued_at: string; valid: boolean } | null;
   history: AppEvent[];
   emails: CaseEmail[];
+  // Case fee: the item's fee (null: Self Apply not offered), the fee set for this case (null: none),
+  // what the case pays now, and whether it is paid or a payment has started (then it cannot change).
+  item_fee_poisha: number | null;
+  fee_override_poisha: number | null;
+  case_fee_poisha: number | null;
+  fee_locked: boolean;
   changed?: string[];
 }
 

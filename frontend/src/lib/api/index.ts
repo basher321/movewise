@@ -96,6 +96,7 @@ export {
   changeStage,
   changeStatus,
   updateCase,
+  setCaseFee,
   addInternalNote,
   sendCaseEmail,
   listApplicantAccounts,
