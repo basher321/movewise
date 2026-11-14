@@ -111,6 +111,7 @@ const EMAIL: Def[] = [
   text("SMTP host", (s) => s.mail.smtp_host, (s, v) => { s.mail.smtp_host = v; }, { placeholder: "e.g. smtp.gmail.com" }),
   text("SMTP username", (s) => s.mail.smtp_username, (s, v) => { s.mail.smtp_username = v; }),
   secret("SMTP password", "smtp_pass"),
+  text("Webmail link (the ✉ Webmail button in the admin panel opens it)", (s) => s.mail.webmail_url, (s, v) => { s.mail.webmail_url = v; }, { placeholder: "https://webmail.example.com", full: true }),
 ];
 const WHATSAPP: Def[] = [
   text("WhatsApp business number (shown to people)", (s) => s.whatsapp.number, (s, v) => { s.whatsapp.number = v; }),

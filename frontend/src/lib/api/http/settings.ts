@@ -22,6 +22,9 @@ export const getLicence = () => get<LicenceView>("/licence");
 export const getFullLicence = () => get<LicenceView>("/licence/full");
 export const applyLicenceKey = (key: string) => put<LicenceView>("/licence", { key });
 
+// The webmail link for the admin panel's Webmail button (super admin and admins).
+export const getWebmailUrl = async () => (await get<{ url: string }>("/admin/webmail")).url;
+
 export const sendTestEmail = (to: string) => post<TestResult>("/admin/settings/test-email", { to });
 export const sendTestWhatsapp = (to: string) => post<TestResult>("/admin/settings/test-whatsapp", { to });
 // B17: one short test prompt with the saved key and model of this provider.

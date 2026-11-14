@@ -113,6 +113,7 @@ export function toForm(s: Settings): SettingsInput {
       smtp_security: s.mail.smtp_security,
       smtp_username: s.mail.smtp_username,
       smtp_password: "",
+      webmail_url: s.mail.webmail_url,
     },
     whatsapp: {
       number: s.whatsapp.number,
@@ -163,6 +164,10 @@ export function validateSettings(form: SettingsInput, stored: Settings): string 
     return "Default fees must be whole taka above 0.";
   }
   if (!Number.isInteger(form.mail.smtp_port) || form.mail.smtp_port < 1 || form.mail.smtp_port > 65535) return "SMTP port must be from 1 to 65535.";
+  const webmail = form.mail.webmail_url.trim();
+  if (webmail && (!webmail.startsWith("https://") || /\s/.test(webmail))) {
+    return "The webmail link must start with https:// (for example https://webmail.example.com).";
+  }
   const g = form.gateways;
   if (!g.sslcommerz.enabled && !g.bkash.enabled && !g.nagad.enabled && !g.manual.enabled) return "Turn on at least one payment method.";
   const need = (gateway: string, fields: [string, SecretKey][]): string | null => {

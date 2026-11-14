@@ -336,6 +336,8 @@ export interface Settings extends Omit<PublicSettings, "gateways" | "mail" | "wh
     smtp_security: SmtpSecurity;
     smtp_username: string;
     smtp_password: SecretStatus;
+    // The company webmail address ("" = no Webmail button in the admin panel).
+    webmail_url: string;
   };
   whatsapp: {
     number: string;
@@ -364,6 +366,7 @@ export interface SettingsInput extends Omit<PublicSettings, "gateways" | "mail" 
     smtp_security: SmtpSecurity;
     smtp_username: string;
     smtp_password: string;
+    webmail_url: string;
   };
   whatsapp: {
     number: string;

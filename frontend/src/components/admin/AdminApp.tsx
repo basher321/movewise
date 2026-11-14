@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import { useSettings } from "@/components/SettingsProvider";
 import { allowedTabs, resolveTab, ROLE_NAMES, type TabId } from "@/lib/admin/tabs";
-import { getSession, signOut, type AdminUser, type LicenceView } from "@/lib/api";
+import { getSession, getWebmailUrl, signOut, type AdminUser, type LicenceView } from "@/lib/api";
 import ModuleLocked from "@/components/ModuleLocked";
 import AdminAuth from "./AdminAuth";
 import AuditTab from "./AuditTab";
@@ -75,6 +75,8 @@ export function Panel({
   const params = useSearchParams();
   const { toast, toastNode } = useToast();
   const [myAccount, setMyAccount] = useState(false);
+  // The company webmail (set in Settings), for the super admin and admins; finance has no button.
+  const [webmail, setWebmail] = useState("");
   const tabs = allowedTabs(admin, licence);
   const requested = params.get("tab");
   const tab = resolveTab(requested, tabs);
@@ -89,6 +91,20 @@ export function Panel({
 
   const open = (id: TabId) => router.push(pathname + "?tab=" + id, { scroll: false });
 
+  useEffect(() => {
+    if (admin.role === "finance") return;
+    let live = true;
+    getWebmailUrl().then(
+      (url) => {
+        if (live) setWebmail(url);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [admin.role]);
+
   async function leave() {
     await signOut("admin");
     onSignedOut();
@@ -100,6 +116,11 @@ export function Panel({
         <div className="top" style={{ alignItems: "center" }}>
           <h2 style={{ fontSize: 32 }}>{title}</h2>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {webmail ? (
+              <a className="btn ghost sm" href={webmail} target="_blank" rel="noopener noreferrer">
+                ✉ Webmail
+              </a>
+            ) : null}
             <button className="btn ghost sm" type="button" onClick={() => setMyAccount(true)}>
               My account
             </button>

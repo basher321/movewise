@@ -18,6 +18,7 @@ export {
   sendTestEmail,
   sendTestWhatsapp,
   testAiProvider,
+  getWebmailUrl,
   type BrandingKind,
 } from "./http/settings";
 

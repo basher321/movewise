@@ -21,7 +21,7 @@ from starlette.datastructures import UploadFile
 from app.ai import providers as ai_providers
 from app.ai.config import MAX_KEY, MODEL_RE, PROVIDER_LABELS, PROVIDERS, Provider, key_name, normalise
 from app.audit import Actor, write_audit
-from app.auth.deps import require_super_admin
+from app.auth.deps import get_current_actor, require_super_admin
 from app.crypto import DecryptError, decrypt
 from app.db.engine import get_conn
 from app.errors import ApiError, parse_body
@@ -96,6 +96,7 @@ FIELD_PATHS: dict[str, str] = {
     "smtp_port": "mail.smtp_port",
     "smtp_security": "mail.smtp_security",
     "smtp_username": "mail.smtp_username",
+    "webmail_url": "mail.webmail_url",
     "whatsapp_phone_number_id": "whatsapp.phone_number_id",
     "whatsapp_template_name": "whatsapp.template_name",
     "whatsapp_template_language": "whatsapp.template_language",
@@ -103,7 +104,7 @@ FIELD_PATHS: dict[str, str] = {
 }
 # B08: sending settings, shown only to the super admin (never in /settings/public).
 PRIVATE_FIELDS = {
-    "mail": ("smtp_host", "smtp_port", "smtp_security", "smtp_username"),
+    "mail": ("smtp_host", "smtp_port", "smtp_security", "smtp_username", "webmail_url"),
     "whatsapp": ("phone_number_id", "template_name", "template_language", "api_version"),
 }
 HOST_RE = re.compile(r"[A-Za-z0-9.-]{1,253}")
@@ -175,6 +176,8 @@ class MailIn(BaseModel):
     smtp_security: str = "starttls"
     smtp_username: str = ""
     smtp_password: str = ""
+    # The company webmail address, opened from the admin panel ("" = no Webmail button).
+    webmail_url: str = ""
 
 
 class WhatsappIn(BaseModel):
@@ -276,6 +279,7 @@ def _columns(body: SettingsIn) -> dict[str, Any]:
         "smtp_port": body.mail.smtp_port,
         "smtp_security": body.mail.smtp_security,
         "smtp_username": body.mail.smtp_username.strip(),
+        "webmail_url": body.mail.webmail_url.strip(),
         "whatsapp_phone_number_id": body.whatsapp.phone_number_id.strip(),
         "whatsapp_template_name": body.whatsapp.template_name.strip(),
         "whatsapp_template_language": body.whatsapp.template_language.strip(),
@@ -328,6 +332,9 @@ def _validate(body: SettingsIn, available_secrets: set[str]) -> None:
         raise _invalid("Please choose the SMTP security: STARTTLS, SSL or none.")
     if len(mail.smtp_username) > 200:
         raise _invalid("SMTP username must be at most 200 characters.")
+    webmail = mail.webmail_url.strip()
+    if webmail and (not webmail.startswith("https://") or len(webmail) > 500 or any(c.isspace() for c in webmail)):
+        raise _invalid("The webmail link must start with https:// (for example https://webmail.example.com).")
     if wa.phone_number_id.strip() and not DIGITS_RE.fullmatch(wa.phone_number_id.strip()):
         raise _invalid("WhatsApp phone number ID must be digits only.")
     if wa.template_name.strip() and not TEMPLATE_RE.fullmatch(wa.template_name.strip()):
@@ -567,6 +574,15 @@ def get_settings(
     actor: Actor = Depends(require_super_admin), conn: Connection = Depends(get_conn)
 ) -> dict[str, Any]:
     return _full_view(conn)
+
+
+@router.get("/admin/webmail")
+def get_webmail(actor: Actor = Depends(get_current_actor), conn: Connection = Depends(get_conn)) -> dict[str, str]:
+    """The webmail link for the admin panel's Webmail button: super admin and admins only."""
+    if actor.role not in ("super_admin", "admin"):
+        raise ApiError("FORBIDDEN", 403, "Only the super admin and admins can open the webmail.")
+    url = conn.execute(text("SELECT webmail_url FROM settings WHERE singleton = 'settings'")).scalar_one()
+    return {"url": str(url)}
 
 
 @router.put("/settings")

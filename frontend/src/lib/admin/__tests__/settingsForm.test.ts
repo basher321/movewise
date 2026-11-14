@@ -33,7 +33,7 @@ function stored(changes: Partial<Settings> = {}): Settings {
       nagad: { enabled: false, sandbox: true, merchant_id: no, private_key: no },
       manual: { enabled: true, instructions: "" },
     },
-    mail: { sender_name: "", sender_email: "", smtp_host: "", smtp_port: 587, smtp_security: "starttls", smtp_username: "", smtp_password: no },
+    mail: { sender_name: "", sender_email: "", smtp_host: "", smtp_port: 587, smtp_security: "starttls", smtp_username: "", smtp_password: no, webmail_url: "" },
     whatsapp: { number: "", token: no, phone_number_id: "", template_name: "", template_language: "en", api_version: "v21.0" },
     ai: {
       order: ["claude", "openai", "gemini", "groq"],

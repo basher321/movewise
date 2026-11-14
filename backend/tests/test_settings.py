@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
@@ -13,6 +14,8 @@ from sqlalchemy.engine import Connection
 from app import crypto
 from app.crypto import encrypt
 from app.routers import settings as settings_router
+from auth_helpers import sign_in_admin_on
+from conftest import new_client
 
 BKASH_SECRETS = {
     "app_key": "bk-app-key-plain-111",
@@ -255,3 +258,24 @@ def test_saved_values_come_back(
     assert public["default_fee_poisha"] == {"study": 250000, "job": 300000, "visa": 100000, "remote": 100000}
     # jsonb does not keep key order inside each object, so compare values, not text.
     assert public["stats"] == body["stats"]
+
+
+# Webmail link: set by the super admin in Settings, opened by super admin and admins only.
+def test_webmail_link(api: FastAPI, client: TestClient, conn: Connection, act_as: Callable[..., Any], settings_body: Callable[..., dict[str, Any]]) -> None:
+    act_as("super_admin")
+    assert client.get("/api/admin/webmail").json() == {"url": ""}
+    body = settings_body()
+    for bad in ("http://webmail.example.com", "webmail.example.com", "https://a b.example.com"):
+        response = client.put("/api/settings", json={**body, "mail": {**body["mail"], "webmail_url": bad}})
+        assert response.status_code == 422 and response.json()["code"] == "VALIDATION", bad
+    saved = client.put("/api/settings", json={**body, "mail": {**body["mail"], "webmail_url": " https://webmail.example.com "}})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["mail"]["webmail_url"] == "https://webmail.example.com"
+    assert "webmail_url" not in client.get("/api/settings/public").json()["mail"]
+    assert client.get("/api/admin/webmail").json() == {"url": "https://webmail.example.com"}
+    for role, code in (("admin", 200), ("finance", 403)):
+        other = new_client(api)
+        sign_in_admin_on(other, conn, role, ["study"] if role == "admin" else [])
+        assert other.get("/api/admin/webmail").status_code == code, role
+    act_as(None)
+    assert new_client(api).get("/api/admin/webmail").status_code == 401
