@@ -102,7 +102,11 @@ def test_match_needs_no_passport(client: TestClient, setup: dict[str, Any]) -> N
     assert matches[0]["match_percent"] == 100
     assert "Passport" not in " ".join(c["label"] for c in matches[0]["checks"])
     assert client.post("/api/match/remote", json=remote_input(country="Japan")).json() == []
-    assert client.post("/api/match/remote", json=remote_input(occupation="Construction")).json() == []
+    # B25: a role with a different skill still shows when other criteria fit, with a lower match.
+    other = client.post("/api/match/remote", json=remote_input(occupation="Construction")).json()
+    assert [m["item"]["slug"] for m in other] == [setup["job"]["slug"]]
+    assert other[0]["checks"][0] == {"ok": False, "label": "Different skill (Software development)"}
+    assert other[0]["match_percent"] == 86
     assert client.post("/api/match/remote", json=remote_input(english="Native")).status_code == 422
     options = client.get("/api/catalog/options").json()
     # Common remote skills are always offered; a role's own skill is added once.

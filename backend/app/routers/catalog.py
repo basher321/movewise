@@ -285,7 +285,11 @@ async def ask_agent(module: str, request: Request, conn: Connection = Depends(ge
         raise ApiError("VALIDATION", 422, "Please type a question.")
     # B17: an AI answer from the database facts, or the rule-based reply when no AI provider works.
     # Provider calls block for up to 20 seconds each, so they run in a worker thread, never on the event loop.
-    reply = await run_in_threadpool(advisor.answer, conn, module, question, body.inputs, client_ip(request))  # type: ignore[arg-type]
+    # B25: an applicant signed in to this same module gets answers about their own cases too.
+    applicant = current_applicant_row(request, conn, module)  # type: ignore[arg-type]
+    reply = await run_in_threadpool(
+        advisor.answer, conn, module, question, body.inputs, client_ip(request), applicant  # type: ignore[arg-type]
+    )
     return {"answer": reply}
 
 

@@ -249,27 +249,34 @@ def match_job(conn: Connection, data: JobInput) -> list[dict[str, Any]]:
     return results
 
 
+def _remote_rank(result: dict[str, Any]) -> tuple[int, bool, int, str]:
+    """More criteria first; among equals the chosen skill, then the highest salary, then the title."""
+    item = result["item"]
+    return (-result["match_percent"], not result["checks"][0]["ok"], -item["salary_usd"], item["title"])
+
+
 def match_remote(conn: Connection, data: RemoteInput) -> list[dict[str, Any]]:
-    """Remote Jobs: open remote roles for the skill (and the employer's country, or any)."""
+    """Remote Jobs (B25): every open remote role in the country (or any) that meets at least one
+    of the five criteria, best first. The criteria count equally, like the study match."""
     fee = default_fees(conn)["remote"]
     edu = EDUCATION_LEVELS.index(data.education)
     eng = ENGLISH_LEVELS.index(data.english)
+    skill = data.occupation.strip()
     country = data.country.strip()
     goal = data.salary_goal_usd
     results = []
     for v in public_remote_jobs(conn):
-        if v["occupation"] != data.occupation.strip():
-            continue
         if country and country != ANY_COUNTRY and v["country"] != country:
             continue
         checks: list[Check] = [
+            (v["occupation"] == skill, f"{skill} role", f"Different skill ({v['occupation']})", 1),
             (
                 data.experience >= v["min_experience"],
                 f"Experience meets {v['min_experience']} yrs",
                 f"Needs {v['min_experience']}+ yrs experience",
-                2,
+                1,
             ),
-            (edu >= v["min_education"], "Education fits", f"Needs {EDUCATION_LEVELS[v['min_education']]}", 1.5),
+            (edu >= v["min_education"], "Education fits", f"Needs {EDUCATION_LEVELS[v['min_education']]}", 1),
             (eng >= v["min_english"], "English fits", f"Needs {ENGLISH_LEVELS[v['min_english']]} English", 1),
             (
                 not goal or v["salary_usd"] >= goal,
@@ -278,8 +285,9 @@ def match_remote(conn: Connection, data: RemoteInput) -> list[dict[str, Any]]:
                 1,
             ),
         ]
-        results.append(_score(vacancy_view(v, fee), checks))
-    results.sort(key=lambda r: -r["match_percent"])
+        if any(ok for ok, _, _, _ in checks):
+            results.append(_score(vacancy_view(v, fee), checks))
+    results.sort(key=_remote_rank)
     return results
 
 

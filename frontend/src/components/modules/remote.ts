@@ -1,5 +1,6 @@
 import { COUNTRY_FLAGS, EDUCATION_LEVELS, ENGLISH_LEVELS, getRemoteJob, matchRemoteJobs, type Vacancy } from "@/lib/api";
 import { formatDate, formatMoney } from "@/lib/format";
+import { criteriaGroup } from "./criteria";
 import type { ModuleConfig } from "./types";
 
 const usd = (n: number) => "$" + n.toLocaleString("en-US");
@@ -28,8 +29,10 @@ export const remoteConfig: ModuleConfig = {
     name: "Remote Jobs Agent",
     icon: "💻",
     resultsHeading: (n) => n + (n === 1 ? " remote role matched" : " remote roles matched") + " to your skills",
-    noMatch: "No open remote role fits that skill yet. Try another option, or",
+    noMatch: "Nothing fits your details yet. Try changing them, or",
     nothingOpen: "Verified remote roles are being added. Please check back soon, or talk to an advisor.",
+    // B25: roles meeting some of the criteria are shown too, grouped like the study results.
+    group: criteriaGroup,
   },
   match: async (inputs) =>
     (

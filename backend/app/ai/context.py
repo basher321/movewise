@@ -11,7 +11,7 @@ import re
 from typing import Any, Literal
 
 from sqlalchemy import text
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, RowMapping
 
 from app.applications import money_text
 from app.catalog import (
@@ -25,6 +25,7 @@ from app.catalog import (
     public_vacancies,
     public_visa_programs,
 )
+from app.ai.my_cases import my_cases
 from app.match import _agent_matches
 from app.catalog import success_rate
 from app.stages import DOCUMENT_TYPES, STAGES
@@ -149,7 +150,13 @@ def _company(conn: Connection) -> dict[str, str]:
     return {k: str(v) for k, v in row.items() if v}
 
 
-def build_facts(conn: Connection, module: AgentModule, question: str, inputs: dict[str, Any] | None) -> dict[str, Any]:
+def build_facts(
+    conn: Connection,
+    module: AgentModule,
+    question: str,
+    inputs: dict[str, Any] | None,
+    applicant: RowMapping | None = None,
+) -> dict[str, Any]:
     fee_default = default_fees(conn)[module]
     rows = _rows(conn, module)
     by_id = {r["id"]: r for r in rows}
@@ -180,7 +187,7 @@ def build_facts(conn: Connection, module: AgentModule, question: str, inputs: di
             fact["match_percent_for_this_applicant"] = percent[rid]
         items.append(fact)
 
-    return {
+    facts: dict[str, Any] = {
         "section": _SECTION[module],
         "company": _company(conn),
         "default_application_fee": money_text(fee_default),
@@ -192,3 +199,8 @@ def build_facts(conn: Connection, module: AgentModule, question: str, inputs: di
         "items_key": _ITEMS_KEY[module],
         _ITEMS_KEY[module]: items,
     }
+    # B25 applicant mode: the signed-in applicant's own cases in this module (only theirs).
+    if applicant is not None:
+        facts["asker_is_signed_in_applicant"] = True
+        facts["my_cases"] = my_cases(conn, applicant, module)
+    return facts
