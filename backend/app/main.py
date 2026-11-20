@@ -45,6 +45,7 @@ from app.routers import settings as settings_router
 from app.routers import team as team_router
 from app.routers import success as success_router
 from app.routers import custom_payments as custom_payments_router
+from app.routers import cv as cv_router
 
 MAX_BODY_BYTES = 3 * 1024 * 1024
 TOO_LARGE_MESSAGE = "Request body is larger than 3 MB."
@@ -56,6 +57,8 @@ DOCUMENT_UPLOAD_TOO_LARGE = "The file must be 10 MB or smaller."
 EXCEL_IMPORT_PATH = re.compile(r"/api/admin/import/[^/]+/(preview|commit)")
 EXCEL_IMPORT_MAX_BODY = 6 * 1024 * 1024
 EXCEL_IMPORT_TOO_LARGE = "The file must be 5 MB or smaller."
+# B28: a CV Agent upload may be up to 10 MB; 1 MB more for the form around it.
+CV_UPLOAD_PATH = re.compile(r"/api/me/[a-z]+/cv/projects/[^/]+/files")
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # Payment gateway callbacks come from the gateway's own site (B07). They change nothing on their
 # own: every success is checked with the gateway by the server first.
@@ -63,9 +66,11 @@ ORIGIN_EXEMPT_PREFIX = "/api/pay/"
 
 
 def body_limit(method: str, path: str) -> tuple[int, str]:
-    """The largest request body allowed: 3 MB, except an agent or partner document upload (B21)
-    and an Excel upload (B23)."""
+    """The largest request body allowed: 3 MB, except an agent or partner document upload (B21),
+    a CV Agent upload (B28) and an Excel upload (B23)."""
     if method == "POST" and DOCUMENT_UPLOAD_PATH.fullmatch(path):
+        return DOCUMENT_UPLOAD_MAX_BODY, DOCUMENT_UPLOAD_TOO_LARGE
+    if method == "POST" and CV_UPLOAD_PATH.fullmatch(path):
         return DOCUMENT_UPLOAD_MAX_BODY, DOCUMENT_UPLOAD_TOO_LARGE
     if method == "POST" and EXCEL_IMPORT_PATH.fullmatch(path):
         return EXCEL_IMPORT_MAX_BODY, EXCEL_IMPORT_TOO_LARGE
@@ -199,6 +204,7 @@ def create_app() -> FastAPI:
     app.include_router(documents_router.router, prefix="/api")
     app.include_router(pay_router.router, prefix="/api")
     app.include_router(custom_payments_router.router, prefix="/api")
+    app.include_router(cv_router.router, prefix="/api")
     app.include_router(finance_router.router, prefix="/api")
     app.include_router(notifications_router.router, prefix="/api")
     app.include_router(enrolments_router.router, prefix="/api")
