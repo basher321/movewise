@@ -15,7 +15,7 @@ import {
   type CvMissingField,
   type CvProject,
 } from "@/lib/api";
-import { chunk, leftBlank, unanswered } from "@/lib/cv/wizard";
+import { chunk, leftBlank } from "@/lib/cv/wizard";
 import { errorText } from "../auth/messages";
 import { SectionEditor, sectionNeedsConfirm, sectionSummary, type EditableSection } from "./editors";
 import type { StepProps } from "./Wizard";
@@ -164,21 +164,23 @@ export default function StepDetails({ module, project, state, setState, next, se
 
   const screens = chunk(state.missing);
   const current = screens[Math.min(screen, Math.max(screens.length - 1, 0))] ?? [];
-  const requiredLeft = state.missing.filter((f) => f.required);
-
-  async function sendAnswers() {
-    const empty = unanswered(current, answers);
-    if (empty.length) return setError("Please answer: " + empty.map((f) => f.label).join(", ") + ".");
+  // Saves what was answered; questions left empty are skipped (that part is left out of the CV).
+  async function sendAnswers(fields: typeof current, thenNext = false) {
+    if (!fields.length) {
+      if (thenNext) next();
+      return;
+    }
     const payload: Record<string, unknown> = {};
-    for (const f of current) {
+    for (const f of fields) {
       const v = answers[f.key] ?? f.value;
-      if (v !== undefined && v !== null && v !== "") payload[f.key] = v;
+      if (v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) payload[f.key] = v;
     }
     setBusy(true);
     try {
-      setState(await answerCv(module, project.id, payload, leftBlank(current, answers)));
+      setState(await answerCv(module, project.id, payload, leftBlank(fields, answers)));
       setScreen(0);
       setError("");
+      if (thenNext) next();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -233,10 +235,10 @@ export default function StepDetails({ module, project, state, setState, next, se
             ))}
           </div>
           <p className="sub" style={{ fontSize: 13, margin: "10px 0 0" }}>
-            Questions marked (optional) can stay empty: that part is then left out of your CV.
+            You can leave any question empty: that part is then left out of your CV. You can still add it later with Edit.
           </p>
           <div className="cr" style={{ marginTop: 12, flexWrap: "wrap" }}>
-            <button className="btn" type="button" disabled={busy} onClick={() => void sendAnswers()}>
+            <button className="btn" type="button" disabled={busy} onClick={() => void sendAnswers(current)}>
               Save answers
             </button>
             {screens.length > 1 ? (
@@ -282,13 +284,13 @@ export default function StepDetails({ module, project, state, setState, next, se
       ))}
 
       <div className="cr" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" type="button" disabled={requiredLeft.length > 0} onClick={next}>
+        <button className="btn" type="button" disabled={busy} onClick={() => void sendAnswers(state.missing, true)}>
           Next →
         </button>
       </div>
-      {requiredLeft.length ? (
+      {state.missing.length ? (
         <p className="sub" style={{ textAlign: "right" }}>
-          Answer the questions above to continue.
+          Unanswered questions are skipped and left out of your CV.
         </p>
       ) : null}
     </div>

@@ -481,3 +481,20 @@ def test_file_name_leaves_out_titles_and_nicknames() -> None:
     assert named("Md. Rafiul Karim (Rafi)") == "Rafiul_Karim_CV_Australia.pdf"
     assert named("Mst. Nadia Islam") == "Nadia_Islam_CV_Australia.pdf"
     assert named("Karim Hossain") == "Karim_Hossain_CV_Australia.pdf"
+
+
+def test_unanswered_questions_are_skipped_and_the_cv_still_goes_forward(me: TestClient) -> None:
+    pid = start(me, country="UK", cv_type="new")
+    missing = [f["key"] for f in me.get(base(pid) + "/state").json()["missing"]]
+    state = me.post(base(pid) + "/answers", json={"answers": {"skills.technical": ["Welding", "Cutting", "Safety"]},
+                                                 "skip": missing}).json()
+    assert state["missing"] == []
+    assert me.post(base(pid) + "/generate").status_code == 200
+    review = me.post(base(pid) + "/review", json={}).json()
+    assert any("full name is missing" in i["message"] for i in review["issues"] if i["severity"] == "blocking")
+    assert me.post(base(pid) + "/approve").status_code == 409
+    # Nothing at all to write about: the agent says what to add.
+    empty = start(me, country="UK", cv_type="new")
+    skip_all = [f["key"] for f in me.get(base(empty) + "/state").json()["missing"]]
+    me.post(base(empty) + "/answers", json={"answers": {}, "skip": skip_all})
+    assert me.post(base(empty) + "/generate").json()["message"].startswith("Please add at least your education")

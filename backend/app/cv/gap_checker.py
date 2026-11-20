@@ -121,7 +121,8 @@ def _document_questions(data: CvData, unread: frozenset[str], have: set[str]) ->
 
 def missing(data: CvData, rules: CountryRules, cv_type: str | None, category: str | None,
             unread: frozenset[str] = frozenset()) -> list[Field_]:
-    """The questions still open. Optional ones the person left blank before are not asked again."""
+    """The questions still open. Questions the person left blank before are not asked again (that
+    part is left out; the review at the end still says if something essential is missing)."""
     out = _essentials(data, rules, cv_type, category)
     out += _document_questions(data, unread, {f.key for f in out})
     if "language" in unread:
@@ -129,7 +130,7 @@ def missing(data: CvData, rules: CountryRules, cv_type: str | None, category: st
             if f.key == "languages.english.test_score" and not f.note:
                 f.note = DOC_NOTES["language"]
     skipped = set(data.skipped_questions)
-    return [f for f in out if f.required or f.key not in skipped]
+    return [f for f in out if f.key not in skipped]
 
 
 def _essentials(data: CvData, rules: CountryRules, cv_type: str | None, category: str | None) -> list[Field_]:

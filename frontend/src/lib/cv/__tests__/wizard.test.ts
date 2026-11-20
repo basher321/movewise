@@ -49,7 +49,7 @@ describe("CV wizard", () => {
 describe("optional questions left blank", () => {
   it("are reported so that part is left out of the CV", () => {
     const fields = [field("training.new.name", false), field("training.new.date", false), field("personal.full_name"), field("x", false, ["a"])];
-    expect(leftBlank(fields, { "training.new.date": "2024-05" })).toEqual(["training.new.name"]);
-    expect(leftBlank(fields, { "training.new.name": "First aid", "training.new.date": "2024-05" })).toEqual([]);
+    expect(leftBlank(fields, { "training.new.date": "2024-05" })).toEqual(["training.new.name", "personal.full_name"]);
+    expect(leftBlank(fields, { "training.new.name": "First aid", "training.new.date": "2024-05", "personal.full_name": "A" })).toEqual([]);
   });
 });

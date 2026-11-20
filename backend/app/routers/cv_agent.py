@@ -212,7 +212,7 @@ def merge_files(module: str, project_id: str, me: Applicant = Depends(current_ap
 
 class AnswersIn(BaseModel):
     answers: dict[str, Any] = Field(max_length=60)
-    # Optional questions on the screen the person left blank.
+    # Questions on the screen the person left blank: skipped, and that part is left out.
     skip: list[str] = Field(default_factory=list, max_length=60)
 
 
@@ -222,8 +222,8 @@ async def give_answers(module: str, project_id: str, request: Request, me: Appli
     row = _project(conn, me, module, project_id)
     body = parse_body(AnswersIn, await request.body())
     before = current_data(conn, row["id"])
-    optional = {f.key for f in _missing(conn, row, before) if not f.required}
-    skip = [k for k in body.skip if k in optional and k not in body.answers]
+    asked = {f.key for f in _missing(conn, row, before)}
+    skip = [k for k in body.skip if k in asked and k not in body.answers]
     data = gap_checker.apply_answers(before, body.answers, skip)
     if "personal.email" in body.answers and data.personal.email and not re.fullmatch(r"\S+@\S+\.\S+", data.personal.email):
         raise _invalid("Please enter a valid email address.")
@@ -280,8 +280,8 @@ def generate(module: str, project_id: str, me: Applicant = Depends(current_appli
         raise ApiError("CONFLICT", 409, "Please choose the CV type, country and category first.")
     facts = facts_data(conn, row["id"])
     rules = rules_for(row["country"], row["cv_type"])
-    if gap_checker.blocking_missing(_missing(conn, row, facts)):
-        raise ApiError("CONFLICT", 409, "Please answer the missing questions first.")
+    if not (facts.experience or facts.education or facts.skills.technical or facts.skills.soft):
+        raise ApiError("CONFLICT", 409, "Please add at least your education, a job or your skills, so the agent has something to write.")
     ensure_allowance(conn, _caller(row))
     template = _template(row)
     data, questions = writer.write(conn, _caller(row), row, facts, rules)

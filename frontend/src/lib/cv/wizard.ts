@@ -33,10 +33,10 @@ export function unanswered(fields: CvMissingField[], answers: Record<string, unk
   });
 }
 
-// Optional questions on this screen with no answer: the person chose to leave them out.
+// Questions with no answer: the person chose to skip them, so that part is left out of the CV.
 export function leftBlank(fields: CvMissingField[], answers: Record<string, unknown>): string[] {
   return fields
-    .filter((f) => !f.required && f.kind !== "boolean")
+    .filter((f) => f.kind !== "boolean")
     .filter((f) => {
       const v = answers[f.key] ?? f.value;
       if (Array.isArray(v)) return v.length === 0;
