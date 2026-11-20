@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.countries import WORLD_COUNTRIES
 from app.cv.countries import CountryRules
-from app.cv.schema import CvData, Education, Experience, Language, clean, clean_date
+from app.cv.schema import Certification, CvData, Education, Experience, Language, Training, clean, clean_date
 
 Kind = Literal["text", "email", "tel", "month", "select", "chips", "boolean", "url"]
 
@@ -50,15 +50,89 @@ class Field_(BaseModel):
     options: list[str] = Field(default_factory=list)
     value: Any = None
     hint: str = ""
+    # Why the agent asks (for example "Your training certificate was not read").
+    note: str = ""
 
 
 def _f(key: str, label: str, kind: Kind, section: str, required: bool = True, options: tuple[str, ...] | list[str] = (),
-       value: Any = None, hint: str = "") -> Field_:
+       value: Any = None, hint: str = "", note: str = "") -> Field_:
     return Field_(key=key, label=label, kind=kind, section=section, required=required, options=list(options),
-                  value=value, hint=hint)
+                  value=value, hint=hint, note=note)
 
 
-def missing(data: CvData, rules: CountryRules, cv_type: str | None, category: str | None) -> list[Field_]:
+# Document types the person ticked or uploaded but the agent could not read (not uploaded, a photo or
+# scan without an image-reading AI, the old .doc format, a damaged file): questions about that document.
+DOC_NOTES = {
+    "academic": "Your academic certificate was not read, so please tell us about it.",
+    "experience": "Your experience letter was not read, so please tell us about the job.",
+    "training": "Your training certificate was not read. Leave empty if you have no training to show.",
+    "licence": "Your licence or certificate was not read. Leave empty if you have none to show.",
+    "language": "Your language test result was not read. Leave empty if you have no test score.",
+    "passport": "Your passport was not read. Only your nationality is used.",
+}
+
+
+def _job_fields(required: bool, note: str = "") -> list[Field_]:
+    return [
+        _f("experience.new.job_title", "Your latest job title", "text", "experience", required, note=note),
+        _f("experience.new.employer", "Employer (company name)", "text", "experience", required, note=note),
+        _f("experience.new.location", "City and country of that job", "text", "experience", required, note=note),
+        _f("experience.new.start_date", "Start month", "month", "experience", required, note=note),
+        _f("experience.new.current", "I still work there", "boolean", "experience", required=False, value=False, note=note),
+        _f("experience.new.end_date", "End month (leave empty if you still work there)", "month", "experience",
+           required=False, note=note),
+        _f("experience.new.bullets", "Main duties (add one at a time)", "chips", "experience", required=False, note=note),
+    ]
+
+
+def _document_questions(data: CvData, unread: frozenset[str], have: set[str]) -> list[Field_]:
+    out: list[Field_] = []
+    if "academic" in unread and data.education:
+        first = data.education[0]
+        if not first.grade:
+            out.append(_f(f"education.{first.id}.grade", f"Your result at {first.institution or 'your last school'}",
+                          "text", "education", required=False, hint="e.g. CGPA 3.50 out of 4", note=DOC_NOTES["academic"]))
+    if "experience" in unread and not data.experience and "experience.new.job_title" not in have:
+        out += _job_fields(False, DOC_NOTES["experience"])
+    if "training" in unread and not data.training:
+        note = DOC_NOTES["training"]
+        out += [
+            _f("training.new.name", "Training course name", "text", "training", required=False, note=note),
+            _f("training.new.provider", "Training centre", "text", "training", required=False, note=note),
+            _f("training.new.date", "Month you finished", "month", "training", required=False, note=note),
+        ]
+    if "licence" in unread and not data.certifications:
+        note = DOC_NOTES["licence"]
+        out += [
+            _f("certifications.new.name", "Licence or certificate name", "text", "certifications", required=False, note=note),
+            _f("certifications.new.issuer", "Issued by", "text", "certifications", required=False, note=note),
+            _f("certifications.new.date", "Month issued", "month", "certifications", required=False, note=note),
+        ]
+    if "language" in unread and "languages.english.test_score" not in have:
+        english = next((lang for lang in data.languages if lang.language.lower() == "english"), None)
+        if english is None or not english.test_score:
+            out.append(_f("languages.english.test_score", "IELTS / TOEFL / PTE score", "text", "languages", required=False,
+                          hint="e.g. IELTS 6.5", note=DOC_NOTES["language"]))
+    if "passport" in unread and not data.personal.nationality:
+        out.append(_f("personal.nationality", "Nationality (as in your passport)", "text", "personal", required=False,
+                      value="Bangladeshi", note=DOC_NOTES["passport"]))
+    return out
+
+
+def missing(data: CvData, rules: CountryRules, cv_type: str | None, category: str | None,
+            unread: frozenset[str] = frozenset()) -> list[Field_]:
+    """The questions still open. Optional ones the person left blank before are not asked again."""
+    out = _essentials(data, rules, cv_type, category)
+    out += _document_questions(data, unread, {f.key for f in out})
+    if "language" in unread:
+        for f in out:
+            if f.key == "languages.english.test_score" and not f.note:
+                f.note = DOC_NOTES["language"]
+    skipped = set(data.skipped_questions)
+    return [f for f in out if f.required or f.key not in skipped]
+
+
+def _essentials(data: CvData, rules: CountryRules, cv_type: str | None, category: str | None) -> list[Field_]:
     out: list[Field_] = []
     p = data.personal
     if not p.full_name:
@@ -87,15 +161,7 @@ def missing(data: CvData, rules: CountryRules, cv_type: str | None, category: st
 
     needs_work = "experience" in rules.required_for(cv_type, category)
     if not data.experience and needs_work:
-        out += [
-            _f("experience.new.job_title", "Your latest job title", "text", "experience"),
-            _f("experience.new.employer", "Employer (company name)", "text", "experience"),
-            _f("experience.new.location", "City and country of that job", "text", "experience"),
-            _f("experience.new.start_date", "Start month", "month", "experience"),
-            _f("experience.new.current", "I still work there", "boolean", "experience", required=False, value=False),
-            _f("experience.new.end_date", "End month (leave empty if you still work there)", "month", "experience", required=False),
-            _f("experience.new.bullets", "Main duties (add one at a time)", "chips", "experience", required=False),
-        ]
+        out += _job_fields(True)
     for x in data.experience:
         if x.employer and not x.start_date:
             out.append(_f(f"experience.{x.id}.start_date", f"When did you start at {x.employer}?", "month", "experience"))
@@ -139,10 +205,14 @@ def _list(value: Any) -> list[str]:
     return []
 
 
-def apply_answers(data: CvData, answers: dict[str, Any]) -> CvData:
-    """Puts answers from the gap form into the data. Unknown keys are ignored."""
+def apply_answers(data: CvData, answers: dict[str, Any], skip: list[str] | None = None) -> CvData:
+    """Puts answers from the gap form into the data. Unknown keys are ignored. Optional questions
+    left blank (skip) are remembered, so they are not asked again and that part stays off the CV."""
     new_edu: dict[str, Any] = {}
     new_job: dict[str, Any] = {}
+    new_training: dict[str, Any] = {}
+    new_cert: dict[str, Any] = {}
+    data.skipped_questions = list(dict.fromkeys([*data.skipped_questions, *(skip or [])]))
     for key, value in answers.items():
         parts = key.split(".")
         if parts[0] == "personal" and len(parts) == 2 and parts[1] in Field_names_personal:
@@ -166,6 +236,10 @@ def apply_answers(data: CvData, answers: dict[str, Any]) -> CvData:
                         setattr(x, parts[2], clean_date(str(value)))
                         if parts[2] == "end_date" and not value:
                             x.current = True
+        elif key.startswith("training.new.") and len(parts) == 3:
+            new_training[parts[2]] = value
+        elif key.startswith("certifications.new.") and len(parts) == 3:
+            new_cert[parts[2]] = value
         elif key in ("skills.technical", "skills.soft"):
             setattr(data.skills, parts[1], _list(value))
         elif parts[0] == "languages" and len(parts) == 3:
@@ -191,6 +265,14 @@ def apply_answers(data: CvData, answers: dict[str, Any]) -> CvData:
             location=_text(new_job.get("location")), start_date=clean_date(str(new_job.get("start_date") or "")),
             end_date="" if current else clean_date(str(new_job.get("end_date") or "")), current=current,
             bullets=_list(new_job.get("bullets")), source_file="your answer"))
+    if _text(new_training.get("name")):
+        data.training.append(Training(
+            name=_text(new_training.get("name")), provider=_text(new_training.get("provider")),
+            date=clean_date(str(new_training.get("date") or "")), source_file="your answer"))
+    if _text(new_cert.get("name")):
+        data.certifications.append(Certification(
+            name=_text(new_cert.get("name")), issuer=_text(new_cert.get("issuer")),
+            date=clean_date(str(new_cert.get("date") or "")), source_file="your answer"))
     return data
 
 

@@ -79,8 +79,9 @@ export const getCvState = (module: Module, id: string) => get<CvState>(base(modu
 export const readCvFile = (module: Module, id: string, fileId: string) =>
   post<CvFile>(base(module, id) + `/files/${encodeURIComponent(fileId)}/extract`);
 export const mergeCvFiles = (module: Module, id: string) => post<CvState>(base(module, id) + "/merge");
-export const answerCv = (module: Module, id: string, answers: Record<string, unknown>) =>
-  post<CvState>(base(module, id) + "/answers", { answers });
+// skip: optional questions left blank - not asked again, and that part stays off the CV.
+export const answerCv = (module: Module, id: string, answers: Record<string, unknown>, skip: string[] = []) =>
+  post<CvState>(base(module, id) + "/answers", { answers, skip });
 export const saveCvData = (module: Module, id: string, cv: CvData, reason: "edited" | "removed" = "edited") =>
   put<CvState>(base(module, id) + "/data", { cv, reason });
 export const undoCv = (module: Module, id: string) => post<CvState>(base(module, id) + "/undo");

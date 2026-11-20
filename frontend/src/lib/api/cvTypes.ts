@@ -183,6 +183,8 @@ export interface CvMissingField {
   options: string[];
   value: unknown;
   hint: string;
+  // Why the agent asks, e.g. "Your training certificate was not read".
+  note: string;
 }
 
 export interface CvState {

@@ -90,6 +90,22 @@ def save_version(conn: Connection, project_id: Any, data: CvData, reason: str, m
     return number
 
 
+def unread_kinds(conn: Connection, row: RowMapping) -> frozenset[str]:
+    """Document types the person ticked or uploaded that were not read: the agent asks about them."""
+    files = conn.execute(
+        text("SELECT doc_kind, extraction_status FROM cv_files WHERE project_id = :p AND deleted_at IS NULL"),
+        {"p": row["id"]},
+    ).all()
+    read = {f.doc_kind for f in files if f.extraction_status == "done"}
+    wanted = set(row["doc_kinds"] or []) | {f.doc_kind for f in files}
+    return frozenset(wanted - read - {"cv", "other"})
+
+
+def _missing(conn: Connection, row: RowMapping, data: CvData) -> list[gap_checker.Field_]:
+    rules = rules_for(row["country"], row["cv_type"])
+    return gap_checker.missing(data, rules, row["cv_type"], row["category"], unread_kinds(conn, row))
+
+
 def _template(row: RowMapping) -> str:
     return row["template"] or recommended_template(row["country"], row["cv_type"], row["category"])
 
@@ -98,7 +114,7 @@ def _state(conn: Connection, row: RowMapping) -> dict[str, Any]:
     data = current_data(conn, row["id"])
     rules = rules_for(row["country"], row["cv_type"])
     version = _latest(conn, row["id"])
-    fields = gap_checker.missing(data, rules, row["cv_type"], row["category"])
+    fields = _missing(conn, row, data)
     letter = conn.execute(
         text("SELECT body, version FROM cover_letters WHERE project_id = :p ORDER BY version DESC LIMIT 1"), {"p": row["id"]}
     ).one_or_none()
@@ -196,6 +212,8 @@ def merge_files(module: str, project_id: str, me: Applicant = Depends(current_ap
 
 class AnswersIn(BaseModel):
     answers: dict[str, Any] = Field(max_length=60)
+    # Optional questions on the screen the person left blank.
+    skip: list[str] = Field(default_factory=list, max_length=60)
 
 
 @router.post("/me/{module}/cv/projects/{project_id}/answers")
@@ -203,7 +221,10 @@ async def give_answers(module: str, project_id: str, request: Request, me: Appli
                        conn: Connection = Depends(get_conn)) -> dict[str, Any]:
     row = _project(conn, me, module, project_id)
     body = parse_body(AnswersIn, await request.body())
-    data = gap_checker.apply_answers(current_data(conn, row["id"]), body.answers)
+    before = current_data(conn, row["id"])
+    optional = {f.key for f in _missing(conn, row, before) if not f.required}
+    skip = [k for k in body.skip if k in optional and k not in body.answers]
+    data = gap_checker.apply_answers(before, body.answers, skip)
     if "personal.email" in body.answers and data.personal.email and not re.fullmatch(r"\S+@\S+\.\S+", data.personal.email):
         raise _invalid("Please enter a valid email address.")
     save_version(conn, row["id"], data, "answers")
@@ -259,7 +280,7 @@ def generate(module: str, project_id: str, me: Applicant = Depends(current_appli
         raise ApiError("CONFLICT", 409, "Please choose the CV type, country and category first.")
     facts = facts_data(conn, row["id"])
     rules = rules_for(row["country"], row["cv_type"])
-    if gap_checker.blocking_missing(gap_checker.missing(facts, rules, row["cv_type"], row["category"])):
+    if gap_checker.blocking_missing(_missing(conn, row, facts)):
         raise ApiError("CONFLICT", 409, "Please answer the missing questions first.")
     ensure_allowance(conn, _caller(row))
     template = _template(row)

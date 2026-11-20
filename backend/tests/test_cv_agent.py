@@ -358,3 +358,39 @@ def test_cv_limits_in_settings(client: TestClient, act_as: Any, settings_body: A
     assert saved.json()["cv"] == {"file_days": 14, "ai_per_day": 25}
     assert client.put("/api/settings", json=settings_body(cv={"file_days": 0, "ai_per_day": 25})).status_code == 422
     assert client.put("/api/settings", json=settings_body()).json()["cv"] == {"file_days": 14, "ai_per_day": 25}
+
+
+def test_unread_documents_become_questions_and_blank_ones_are_left_out(me: TestClient, ai: FakeAi) -> None:
+    pid = start(me, country="UK", cv_type="new", doc_kinds=["training", "licence", "language", "passport"])
+    old_word = upload(me, pid, b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64, "licence.doc", "licence")
+    assert me.post(base(pid) + f"/files/{old_word['id']}/extract").json()["extraction_status"] == "unsupported"
+    state = me.post(base(pid) + "/merge").json()
+    asked = {f["key"]: f for f in state["missing"]}
+    for key in ("training.new.name", "certifications.new.name", "languages.english.test_score", "personal.nationality"):
+        assert key in asked and asked[key]["required"] is False and asked[key]["note"], key
+    assert "training certificate was not read" in asked["training.new.name"]["note"]
+    essentials = {
+        "personal.full_name": "Nadia Islam", "personal.email": "nadia@example.test", "personal.phone": "+8801911111111",
+        "personal.city": "Dhaka", "personal.country": "Bangladesh",
+        "education.new.degree": "Diploma", "education.new.institution": "Dhaka Nursing College",
+        "education.new.end_date": "2019-06", "experience.new.job_title": "Nurse", "experience.new.employer": "City Hospital",
+        "experience.new.location": "Dhaka", "experience.new.start_date": "2020-01",
+        "skills.technical": ["Patient care", "First aid / BLS", "Infection control"],
+        "languages.english.level": "Advanced (C1)", "languages.mother.language": "Bengali",
+        "training.new.name": "Basic Life Support", "training.new.provider": "Red Crescent", "training.new.date": "2022-03",
+    }
+    skip = ["certifications.new.name", "certifications.new.issuer", "certifications.new.date",
+            "languages.english.test_score", "personal.nationality", "training.new.name"]
+    state = me.post(base(pid) + "/answers", json={"answers": essentials, "skip": skip}).json()
+    keys = {f["key"] for f in state["missing"]}
+    assert not keys & {"certifications.new.name", "languages.english.test_score", "personal.nationality", "training.new.name"}
+    assert [t["name"] for t in state["data"]["training"]] == ["Basic Life Support"]
+    assert state["data"]["certifications"] == [] and state["data"]["personal"]["nationality"] == ""
+    assert "training.new.name" not in state["data"]["skipped_questions"]  # it was answered, so not skipped
+    assert me.post(base(pid) + "/generate").status_code == 200
+    text = me.get(base(pid) + "/preview?page=1").status_code
+    assert text == 200
+    from app.cv.layout import build as build_layout
+    from app.cv.schema import CvData as Data
+    sections = {s.key for s in build_layout(Data.model_validate(me.get(base(pid) + "/state").json()["data"]), rules_for("UK"), "modern").sections}
+    assert "training" in sections and "certifications" not in sections

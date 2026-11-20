@@ -15,7 +15,7 @@ import {
   type CvMissingField,
   type CvProject,
 } from "@/lib/api";
-import { chunk, unanswered } from "@/lib/cv/wizard";
+import { chunk, leftBlank, unanswered } from "@/lib/cv/wizard";
 import { errorText } from "../auth/messages";
 import { SectionEditor, sectionNeedsConfirm, sectionSummary, type EditableSection } from "./editors";
 import type { StepProps } from "./Wizard";
@@ -176,7 +176,7 @@ export default function StepDetails({ module, project, state, setState, next, se
     }
     setBusy(true);
     try {
-      setState(await answerCv(module, project.id, payload));
+      setState(await answerCv(module, project.id, payload, leftBlank(current, answers)));
       setScreen(0);
       setError("");
     } catch (err) {
@@ -221,10 +221,20 @@ export default function StepDetails({ module, project, state, setState, next, se
             </span>
           </div>
           <div className="fgrid" style={{ marginTop: 12 }}>
-            {current.map((f) => (
-              <Question key={f.key} f={f} value={answers[f.key] ?? f.value} set={(v) => setAnswers((a) => ({ ...a, [f.key]: v }))} />
+            {current.map((f, i) => (
+              <div key={f.key} style={{ display: "contents" }}>
+                {f.note && f.note !== current[i - 1]?.note ? (
+                  <p className="banner in" style={{ gridColumn: "1 / -1", margin: "4px 0 0" }}>
+                    📄 {f.note}
+                  </p>
+                ) : null}
+                <Question f={f} value={answers[f.key] ?? f.value} set={(v) => setAnswers((a) => ({ ...a, [f.key]: v }))} />
+              </div>
             ))}
           </div>
+          <p className="sub" style={{ fontSize: 13, margin: "10px 0 0" }}>
+            Questions marked (optional) can stay empty: that part is then left out of your CV.
+          </p>
           <div className="cr" style={{ marginTop: 12, flexWrap: "wrap" }}>
             <button className="btn" type="button" disabled={busy} onClick={() => void sendAnswers()}>
               Save answers

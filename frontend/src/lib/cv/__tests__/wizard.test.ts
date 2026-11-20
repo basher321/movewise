@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { CvMissingField, CvProject } from "@/lib/api";
-import { chunk, exportName, furthestStep, linesOf, progress, splitList, unanswered } from "../wizard";
+import { chunk, exportName, furthestStep, leftBlank, linesOf, progress, splitList, unanswered } from "../wizard";
 
 const project = (changes: Partial<CvProject>): CvProject => ({
   id: "1", module: "job", title: "", cv_type: null, cover_letter: false, country: null, category: null, job_advert_text: "",
@@ -10,7 +10,7 @@ const project = (changes: Partial<CvProject>): CvProject => ({
 });
 
 const field = (key: string, required = true, value: unknown = null): CvMissingField => ({
-  key, label: key, kind: "text", section: "personal", required, options: [], value, hint: "",
+  key, label: key, kind: "text", section: "personal", required, options: [], value, hint: "", note: "",
 });
 
 describe("CV wizard", () => {
@@ -42,5 +42,13 @@ describe("CV wizard", () => {
   it("splits typed lists", () => {
     expect(splitList("Python, SQL; Python\nGit")).toEqual(["Python", "SQL", "Git"]);
     expect(linesOf("• Built X\n- Fixed Y\n\n")).toEqual(["Built X", "Fixed Y"]);
+  });
+});
+
+describe("optional questions left blank", () => {
+  it("are reported so that part is left out of the CV", () => {
+    const fields = [field("training.new.name", false), field("training.new.date", false), field("personal.full_name"), field("x", false, ["a"])];
+    expect(leftBlank(fields, { "training.new.date": "2024-05" })).toEqual(["training.new.name"]);
+    expect(leftBlank(fields, { "training.new.name": "First aid", "training.new.date": "2024-05" })).toEqual([]);
   });
 });

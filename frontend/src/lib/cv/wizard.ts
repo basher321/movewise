@@ -33,6 +33,18 @@ export function unanswered(fields: CvMissingField[], answers: Record<string, unk
   });
 }
 
+// Optional questions on this screen with no answer: the person chose to leave them out.
+export function leftBlank(fields: CvMissingField[], answers: Record<string, unknown>): string[] {
+  return fields
+    .filter((f) => !f.required && f.kind !== "boolean")
+    .filter((f) => {
+      const v = answers[f.key] ?? f.value;
+      if (Array.isArray(v)) return v.length === 0;
+      return v === undefined || v === null || String(v).trim() === "";
+    })
+    .map((f) => f.key);
+}
+
 // The same name the server gives the download: Firstname_Lastname_CV_Country.pdf
 export function exportName(fullName: string, country: string | null, kind: "cv" | "letter", ext: "pdf" | "docx"): string {
   const ascii = (s: string) =>

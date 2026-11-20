@@ -265,6 +265,8 @@ class CvData(BaseModel):
     custom_sections: list[CustomSection] = Field(default_factory=list)
     # Sections the person removed from the CV (the data stays, so "Remove" can be undone).
     hidden_sections: list[str] = Field(default_factory=list)
+    # Optional questions the person left blank: not asked again, and that part stays off the CV.
+    skipped_questions: list[str] = Field(default_factory=list)
 
     @field_validator("professional_summary")
     @classmethod
@@ -275,6 +277,11 @@ class CvData(BaseModel):
     @classmethod
     def _hidden(cls, v: list[str]) -> list[str]:
         return [s for s in dict.fromkeys(v) if s in SECTIONS]
+
+    @field_validator("skipped_questions")
+    @classmethod
+    def _skipped(cls, v: list[str]) -> list[str]:
+        return [k[:80] for k in dict.fromkeys(v) if isinstance(k, str)][:200]
 
 
 LIST_SECTIONS: dict[str, type[Item]] = {
