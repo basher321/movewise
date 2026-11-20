@@ -11,6 +11,7 @@ import base64
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar
@@ -28,9 +29,16 @@ from app.errors import ApiError
 logger = logging.getLogger("app.ai")
 
 PROMPTS_DIR = BACKEND_DIR / "prompts" / "cv"
-TIMEOUT_SECONDS = 90.0
+TIMEOUT_SECONDS = 45.0
 MAX_OUTPUT_TOKENS = 8000
 VISION: tuple[Provider, ...] = ("claude", "openai", "gemini")
+# A provider that is busy (HTTP 429 "too many requests", or 503) is asked again after the wait it
+# asks for (Retry-After), at most BUSY_RETRIES times and never longer than MAX_WAIT seconds each.
+BUSY_STATUSES = (429, 503)
+BUSY_RETRIES = 2
+MAX_WAIT = 20.0
+DEFAULT_WAIT = 6.0
+SLEEP = time.sleep
 JSON_REMINDER = (
     "\n\nYour previous answer was not valid JSON for the required shape. Answer again with ONLY one JSON "
     "object, no code fences, no text before or after it."
@@ -128,16 +136,35 @@ def _usage(provider: Provider, data: Any) -> tuple[int | None, int | None]:
     return u.get("promptTokenCount"), u.get("candidatesTokenCount")
 
 
-def _send(p: ReadyProvider, system: str, user: str, images: list[Image]) -> tuple[str, str, tuple[int | None, int | None]]:
-    """(text, error, usage) for one request."""
-    url, headers, body = build(p.provider, p.key, p.model, system, user, images)
+def _wait_seconds(response: httpx.Response) -> float:
+    raw = response.headers.get("retry-after", "")
     try:
-        with httpx.Client(timeout=TIMEOUT_SECONDS, transport=providers.TRANSPORT) as client:
-            response = client.post(url, json=body, headers=headers)
-    except httpx.TimeoutException:
-        return "", "timeout", (None, None)
-    except httpx.HTTPError as exc:
-        return "", type(exc).__name__, (None, None)
+        return min(max(float(raw), 1.0), MAX_WAIT)
+    except ValueError:
+        return DEFAULT_WAIT
+
+
+def _send(p: ReadyProvider, system: str, user: str, images: list[Image]) -> tuple[str, str, tuple[int | None, int | None]]:
+    """(text, error, usage) for one request. A busy provider is asked again after a short wait."""
+    url, headers, body = build(p.provider, p.key, p.model, system, user, images)
+    for busy_try in range(BUSY_RETRIES + 1):
+        try:
+            with httpx.Client(timeout=TIMEOUT_SECONDS, transport=providers.TRANSPORT) as client:
+                response = client.post(url, json=body, headers=headers)
+        except httpx.TimeoutException:
+            # A provider that is slow because it is busy often answers the next time.
+            if busy_try < 1:
+                logger.warning("CV AI provider %s timed out; asking once more", p.provider)
+                continue
+            return "", "timeout", (None, None)
+        except httpx.HTTPError as exc:
+            return "", type(exc).__name__, (None, None)
+        if response.status_code in BUSY_STATUSES and busy_try < BUSY_RETRIES:
+            wait = _wait_seconds(response)
+            logger.warning("CV AI provider %s is busy (HTTP %d); asking again in %.0fs", p.provider, response.status_code, wait)
+            SLEEP(wait)
+            continue
+        break
     if response.status_code >= 400:
         return "", f"HTTP {response.status_code}", (None, None)
     try:

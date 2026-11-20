@@ -73,6 +73,8 @@ def extract(conn: Connection, caller: Caller, file_row: RowMapping, document: Re
         education=out.education, skills=out.skills, languages=out.languages, certifications=out.certifications,
         training=out.training, achievements=out.achievements, references=out.references,
     )
+    if data.personal.full_name.isupper() and len(data.personal.full_name) > 3:
+        data.personal.full_name = " ".join(part.capitalize() for part in data.personal.full_name.split())
     data.personal.sources = {f: name for f in PERSONAL_FIELDS if getattr(data.personal, f)}
     data.personal.confirm_fields = [f for f in out.personal_unsure if f in PERSONAL_FIELDS and getattr(data.personal, f)]
     data.personal.show = []

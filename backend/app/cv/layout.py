@@ -137,7 +137,12 @@ def build(data: CvData, rules: CountryRules, template: str) -> CvLayout:
                 lines.append(("Personal: " if data.skills.technical else "") + ", ".join(data.skills.soft))
             sections.append(Section(key, t["skills"], "lines", lines=lines))
         elif key == "languages" and data.languages:
-            lines = [" – ".join(p for p in (l.language, l.level, l.test_score) if p) for l in data.languages if l.language]
+            lines = []
+            for lang in data.languages:
+                if not lang.language:
+                    continue
+                score = lang.test_score if lang.test_score and lang.test_score.lower() not in lang.level.lower() else ""
+                lines.append(" – ".join(p for p in (lang.language, lang.level, score) if p))
             sections.append(Section(key, t["languages"], "lines", lines=lines))
         elif key == "certifications" and data.certifications:
             lines = []

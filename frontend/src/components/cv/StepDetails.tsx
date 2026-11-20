@@ -128,7 +128,7 @@ export default function StepDetails({ module, project, state, setState, next, se
     if (started.current) return;
     started.current = true;
     void (async () => {
-      const waiting = (project.files ?? []).filter((f) => !f.removed && f.extraction_status === "waiting");
+      const waiting = (project.files ?? []).filter((f) => !f.removed && (f.extraction_status === "waiting" || f.extraction_status === "failed"));
       const failed: string[] = [];
       for (const [i, f] of waiting.entries()) {
         setReading(`Reading your documents… (${i + 1} of ${waiting.length}: ${f.file_name})`);

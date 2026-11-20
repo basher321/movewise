@@ -53,7 +53,11 @@ export function exportName(fullName: string, country: string | null, kind: "cv" 
       .replace(/[^\x00-\x7F]/g, "")
       .replace(/[^A-Za-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "");
-  const parts = fullName.split(/\s+/).filter((p) => ascii(p));
+  const titles = new Set(["md", "mohammad", "mohammed", "muhammad", "mohd", "mst", "most", "mr", "mrs", "ms", "miss", "dr", "engr", "sk"]);
+  const parts = fullName
+    .replace(/\([^)]*\)/g, " ")
+    .split(/\s+/)
+    .filter((p) => ascii(p) && !titles.has(ascii(p).toLowerCase()));
   const picked = parts.length > 1 ? [parts[0], parts[parts.length - 1]] : parts;
   const name = picked.map(ascii).join("_") || "My";
   return `${name}_${kind === "cv" ? "CV" : "Cover_Letter"}_${ascii(country ?? "International") || "International"}.${ext}`;

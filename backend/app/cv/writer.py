@@ -57,8 +57,38 @@ class SectionOut(BaseModel):
 # ---------------------------------------------------------------- grounding
 
 
+# "one" is left out: it is mostly not a number ("one of the", "someone").
+NUMBER_WORDS = {
+    "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+    "eighteen": 18, "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70,
+    "eighty": 80, "ninety": 90, "hundred": 100, "thousand": 1000, "dozen": 12, "dozens": 12, "hundreds": 100,
+    "thousands": 1000, "million": 1000000, "millions": 1000000,
+}
+WORD_RE = re.compile(r"\b(" + "|".join(NUMBER_WORDS) + r")\b", re.I)
+
+
 def _numbers(text: str) -> set[str]:
-    return {n.replace(",", "") for n in NUMBER_RE.findall(text)}
+    """Every number in the text, written in digits or in words ("four years" counts as 4)."""
+    found = {n.replace(",", "") for n in NUMBER_RE.findall(text)}
+    found |= {str(NUMBER_WORDS[m.lower()]) for m in WORD_RE.findall(text)}
+    return found
+
+
+def years_of_experience(facts: CvData) -> int:
+    """Whole years from the first job's start to today (or the last job's end), from the dates."""
+    from datetime import date
+
+    starts = [x.start_date for x in facts.experience if x.start_date]
+    if not starts:
+        return 0
+    ends = ["9999" if x.current or not x.end_date else x.end_date for x in facts.experience if x.start_date]
+    first = min(starts)
+    last = max(ends)
+    today = date.today()
+    end_y, end_m = (today.year, today.month) if last == "9999" else (int(last[:4]), int(last[5:7] or 12) if len(last) > 4 else 12)
+    months = (end_y - int(first[:4])) * 12 + end_m - (int(first[5:7]) if len(first) > 4 else 1)
+    return max(months // 12, 0)
 
 
 _NOT_FACTS = {"id", "source_file", "note", "confidence", "confirm", "sources", "confirm_fields", "show", "hidden_sections"}
@@ -73,8 +103,11 @@ def _strip(value: Any) -> Any:
 
 
 def allowed_numbers(facts: CvData) -> set[str]:
-    """Numbers written in the person's own data (not ids, file names or notes)."""
-    return _numbers(json.dumps(_strip(facts.model_dump()), ensure_ascii=False))
+    """Numbers written in the person's own data (not ids, file names or notes), plus the years of
+    experience worked out from the dates."""
+    found = _numbers(json.dumps(_strip(facts.model_dump()), ensure_ascii=False))
+    years = years_of_experience(facts)
+    return found | ({str(years)} if years else set())
 
 
 def grounded(text: str, allowed: set[str]) -> bool:
@@ -105,6 +138,9 @@ def _facts_json(facts: CvData) -> str:
             for key in ("source_file", "confidence", "confirm", "note"):
                 item.pop(key, None)
     data.pop("references", None)
+    years = years_of_experience(facts)
+    if years:
+        data["years_of_experience"] = years
     return json.dumps(data, ensure_ascii=False)
 
 
@@ -141,17 +177,18 @@ def _user(facts: CvData, project: Any) -> str:
 
 
 def _apply_bullets(data: CvData, facts: CvData, jobs: list[JobBullets], allowed: set[str], most: int) -> None:
+    """New wording for each job's duties. Never more bullets than the person's own data has for
+    that job (so the AI cannot add duties); a job without duties stays without bullets."""
     by_id = {j.id: j for j in jobs}
-    originals = {x.id: x.bullets for x in facts.experience}
+    originals = {x.id: [b for b in x.bullets if b.strip()] for x in facts.experience}
     for x in data.experience:
         new = by_id.get(x.id)
-        if new is None:
+        own = originals.get(x.id, x.bullets)
+        limit = min(most, len(own))
+        if new is None or limit == 0:
             continue
         kept = [clean(b, 300) for b in new.bullets if clean(b, 300) and grounded(b, allowed)]
-        if kept:
-            x.bullets = kept[:most]
-        else:
-            x.bullets = list(originals.get(x.id, x.bullets))[:most]
+        x.bullets = kept[:limit] if kept else list(own)[:limit]
 
 
 def write(conn: Connection, caller: Caller, project: Any, facts: CvData, rules: CountryRules) -> tuple[CvData, list[str]]:

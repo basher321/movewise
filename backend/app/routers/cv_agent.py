@@ -449,8 +449,13 @@ def _ascii(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", plain).strip("_")
 
 
+# Titles left out of the file name ("Md. Rafiul Karim (Rafi)" -> Rafiul_Karim).
+NAME_TITLES = {"md", "mohammad", "mohammed", "muhammad", "mohd", "mst", "most", "mr", "mrs", "ms", "miss", "dr", "engr", "sk"}
+
+
 def file_name(data: CvData, country: str | None, kind: str, ext: str) -> str:
-    parts = [p for p in data.personal.full_name.split() if _ascii(p)]
+    plain = re.sub(r"\([^)]*\)", " ", data.personal.full_name)
+    parts = [p for p in plain.split() if _ascii(p) and _ascii(p).lower() not in NAME_TITLES]
     name = "_".join(_ascii(p) for p in ([parts[0], parts[-1]] if len(parts) > 1 else parts)) or "My"
     return f"{name}_{'CV' if kind == 'cv' else 'Cover_Letter'}_{_ascii(country or 'International') or 'International'}.{ext}"
 

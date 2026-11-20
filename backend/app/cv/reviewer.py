@@ -90,9 +90,11 @@ def check(data: CvData, rules: CountryRules, template: str, page_length: int, pa
     if any(PASSPORT_RE.search(t) for t in texts if t):
         out.append(Issue(severity="blocking", section="personal", message="A passport number must never appear on a CV. Remove it."))
     out += _date_issues(data.experience)
-    dated = [d for x in data.experience + data.education for d in (x.start_date, x.end_date) if d]  # type: ignore[operator]
+    # Job dates should all have a month or all be years only (school results often show only the year).
+    dated = [d for x in data.experience for d in (x.start_date, x.end_date) if d]
     if dated and any("-" in d for d in dated) and any("-" not in d for d in dated):
-        out.append(Issue(severity="warning", section="dates", message="Some dates have a month and some only a year. Use the same style everywhere."))
+        out.append(Issue(severity="warning", section="dates",
+                         message="Some job dates have a month and some only a year. Use the same style for all jobs."))
     seen: dict[str, str] = {}
     for x in data.experience:
         for b in x.bullets:
@@ -124,11 +126,15 @@ class SpellOut(BaseModel):
 
 def spelling(conn: Connection, caller: Caller, data: CvData, rules: CountryRules, template: str) -> list[Issue]:
     layout = build(data, rules, template)
-    body = "\n".join(
-        f"[{s.title}] " + (s.text or " ".join(
-            [e.title + ". " + " ".join(e.bullets) for e in s.entries] + list(s.lines)))
-        for s in layout.sections
-    )
+    lines: list[str] = []
+    for s in layout.sections:
+        lines.append(f"[{s.title}]")
+        if s.text:
+            lines.append(s.text)
+        for e in s.entries:
+            lines += [e.title, *e.bullets]
+        lines += list(s.lines)
+    body = "\n".join(lines)
     system = prompt("reviewer").replace("{{language}}", rules.language_name)
     out = ask_json(conn, caller, "reviewer", system, f"CV TEXT:\n{body[:12000]}", SpellOut)
     issues = []

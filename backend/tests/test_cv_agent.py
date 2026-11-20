@@ -394,3 +394,90 @@ def test_unread_documents_become_questions_and_blank_ones_are_left_out(me: TestC
     from app.cv.schema import CvData as Data
     sections = {s.key for s in build_layout(Data.model_validate(me.get(base(pid) + "/state").json()["data"]), rules_for("UK"), "modern").sections}
     assert "training" in sections and "certifications" not in sections
+
+
+def test_busy_provider_is_asked_again(me: TestClient, conn: Connection, ai: FakeAi, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.cv import ai_client
+
+    waits: list[float] = []
+    monkeypatch.setattr(ai_client, "SLEEP", waits.append)
+    real = ai.handler
+    calls = {"n": 0}
+
+    def busy_twice(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            return httpx.Response(429, headers={"retry-after": "3"}, json={"error": "rate limit"})
+        return real(request)
+
+    monkeypatch.setattr(providers, "TRANSPORT", httpx.MockTransport(busy_twice))
+    pid = start(me)
+    f = upload(me, pid, pdf_with_text(CV_TEXT), "cv.pdf")
+    assert me.post(base(pid) + f"/files/{f['id']}/extract").json()["extraction_status"] == "done"
+    assert waits == [3.0, 3.0]
+
+
+def test_accuracy_rules() -> None:
+    from app.cv.schema import Experience, clean
+    from app.cv.writer import JobBullets, _apply_bullets, allowed_numbers, grounded, years_of_experience
+
+    facts = CvData(experience=[
+        Experience(id="a", employer="Square", start_date="2019-05", current=True, bullets=["Care for patients on 12-hour shifts"]),
+        Experience(id="b", employer="DMC", start_date="2018-01", end_date="2018-12", bullets=["Assisted senior nurses"]),
+        Experience(id="c", employer="Shop", start_date="2017-01", end_date="2017-06", bullets=[]),
+    ])
+    allowed = allowed_numbers(facts)
+    years = years_of_experience(facts)
+    assert years >= 9 and str(years) in allowed
+    assert not grounded("Over four years of nursing", allowed) and grounded(f"{years} years of nursing", allowed)
+    assert grounded("One of the senior nurses", allowed)
+    data = facts.model_copy(deep=True)
+    _apply_bullets(data, facts, [
+        JobBullets(id="a", bullets=["Provided patient care on 12-hour shifts", "Led triage"]),
+        JobBullets(id="b", bullets=["Assisted senior nurses", "Handled documentation", "Did triage"]),
+        JobBullets(id="c", bullets=["Managed the store"]),
+    ], allowed, 6)
+    assert [len(x.bullets) for x in data.experience] == [1, 1, 0]
+    assert clean("high\u2011quality\u00a0care") == "high-quality care"
+
+
+def test_capital_names_and_language_line(me: TestClient, ai: FakeAi) -> None:
+    EXTRACTED["personal"]["full_name"] = "NADIA ISLAM"
+    try:
+        pid = start(me)
+        state = ready_to_write(me, pid)
+    finally:
+        EXTRACTED["personal"]["full_name"] = "Rahim Uddin"
+    assert state["data"]["personal"]["full_name"] == "Nadia Islam"
+    from app.cv.schema import Language
+    data = CvData(languages=[Language(language="English", level="IELTS Academic 7.0", test_score="7.0")])
+    line = next(s for s in build(data, rules_for("UK"), "modern").sections if s.key == "languages").lines[0]
+    assert line == "English – IELTS Academic 7.0"
+
+
+def test_slow_provider_is_asked_once_more(me: TestClient, ai: FakeAi, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = ai.handler
+    calls = {"n": 0}
+
+    def slow_once(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ReadTimeout("slow", request=request)
+        return real(request)
+
+    monkeypatch.setattr(providers, "TRANSPORT", httpx.MockTransport(slow_once))
+    pid = start(me)
+    f = upload(me, pid, pdf_with_text(CV_TEXT), "cv.pdf")
+    assert me.post(base(pid) + f"/files/{f['id']}/extract").json()["extraction_status"] == "done"
+    assert calls["n"] == 2
+
+
+def test_file_name_leaves_out_titles_and_nicknames() -> None:
+    from app.routers.cv_agent import file_name
+
+    def named(n: str) -> str:
+        return file_name(CvData(personal=Personal(full_name=n)), "Australia", "cv", "pdf")
+
+    assert named("Md. Rafiul Karim (Rafi)") == "Rafiul_Karim_CV_Australia.pdf"
+    assert named("Mst. Nadia Islam") == "Nadia_Islam_CV_Australia.pdf"
+    assert named("Karim Hossain") == "Karim_Hossain_CV_Australia.pdf"

@@ -21,8 +21,13 @@ def new_id() -> str:
     return secrets.token_hex(4)
 
 
+# Characters AIs like to write that the CV fonts do not have: non-breaking hyphens and spaces etc.
+_PLAIN = str.maketrans({"\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2212": "-", "\u00a0": " ", "\u202f": " ",
+                        "\u2007": " ", "\u200b": "", "\u00ad": ""})
+
+
 def clean(value: str, limit: int = SHORT) -> str:
-    return " ".join(str(value).split())[:limit]
+    return " ".join(str(value).translate(_PLAIN).split())[:limit]
 
 
 def clean_date(value: str) -> str:

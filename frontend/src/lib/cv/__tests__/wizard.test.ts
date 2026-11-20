@@ -34,7 +34,8 @@ describe("CV wizard", () => {
   });
 
   it("names downloads like the server", () => {
-    expect(exportName("Md. Rahim  Uddin", "Germany", "cv", "pdf")).toBe("Md_Uddin_CV_Germany.pdf");
+    expect(exportName("Md. Rahim  Uddin", "Germany", "cv", "pdf")).toBe("Rahim_Uddin_CV_Germany.pdf");
+    expect(exportName("Md. Rafiul Karim (Rafi)", "Australia", "cv", "pdf")).toBe("Rafiul_Karim_CV_Australia.pdf");
     expect(exportName("José Núñez", "New Zealand", "letter", "docx")).toBe("Jose_Nunez_Cover_Letter_New_Zealand.docx");
     expect(exportName("", null, "cv", "pdf")).toBe("My_CV_International.pdf");
   });
