@@ -8,6 +8,7 @@ the gateway by the server before anything is marked paid.
 
 import logging
 import re
+import time
 from typing import Any, cast
 from uuid import UUID
 
@@ -19,13 +20,13 @@ from sqlalchemy.engine import Connection, RowMapping
 
 from app.applications import add_event, app_fee, item_row, item_title, parse_id
 from app.audit import write_audit
-from app.auth.deps import Applicant, current_applicant, current_applicant_row
+from app.auth.deps import Applicant, client_ip, current_applicant, current_applicant_row
 from app.auth.inputs import normalize_phone
 from app.config import get_settings
 from app.db.engine import get_conn
 from app.errors import ApiError, parse_body
 from app.licence import MODULES, Module
-from app.payments import bkash, sslcommerz
+from app.payments import bkash, eps, sslcommerz
 from app.payments.gateway import GatewayError, gateway_config
 from app.payments.invoices import invoice_view
 from app.payments.service import (
@@ -33,7 +34,9 @@ from app.payments.service import (
     bkash_status,
     confirm_bkash,
     confirm_sslcommerz,
+    eps_status,
     money_text,
+    new_eps_tran_id,
     new_tran_id,
     payment_event,
     record_end,
@@ -47,7 +50,9 @@ logger = logging.getLogger("app")
 router = APIRouter()
 
 BD_MOBILE = re.compile(r"(?:\+?88)?01[3-9]\d{8}")
-METHODS = ("sslcommerz", "bkash", "manual")
+METHODS = ("sslcommerz", "bkash", "eps", "manual")
+EPS_OUTCOMES = ("success", "fail", "cancel")
+EPS_START_ATTEMPTS = 3
 MAX_REASON = 500
 
 
@@ -83,7 +88,10 @@ class PayIn(BaseModel):
 
 def _check_method_on(conn: Connection, method: str) -> None:
     row = conn.execute(
-        text("SELECT sslcommerz_enabled, bkash_enabled, manual_enabled FROM settings WHERE singleton = 'settings'")
+        text(
+            "SELECT sslcommerz_enabled, bkash_enabled, eps_enabled, manual_enabled FROM settings "
+            "WHERE singleton = 'settings'"
+        )
     ).one()
     if not row._mapping[f"{method}_enabled"]:
         raise _invalid("This payment method is not available.")
@@ -132,6 +140,7 @@ def start_payment(
     purpose: str,
     amount_poisha: int,
     body: PayIn,
+    ip: str = "",
 ) -> dict[str, Any]:
     """Shared by application fees and (B09) course enrolments. The caller has locked the
     application or enrolment row, so two starts for the same item run one after the other."""
@@ -162,7 +171,7 @@ def start_payment(
     if live is not None and live["status"] == "pending_verify":
         raise ApiError("CONFLICT", 409, "A payment for this fee is waiting for verification.")
 
-    tran_id = new_tran_id(conn)
+    tran_id = new_eps_tran_id(conn) if method == "eps" else new_tran_id(conn)
     payment = conn.execute(
         text(
             "INSERT INTO payments (applicant_id, module, ref_type, ref_id, purpose, amount_poisha, method, status, "
@@ -209,6 +218,8 @@ def start_payment(
                     "ipn": f"{api}/api/pay/sslcommerz/ipn",
                 },
             )
+        elif method == "eps":
+            session, redirect_url = _start_eps(conn, me, config, payment, phone, ip, api)
         else:
             session, redirect_url = bkash.create(config, tran_id, amount_poisha, phone, f"{api}/api/pay/bkash/callback")
     except GatewayError as exc:
@@ -221,6 +232,36 @@ def start_payment(
     )
     payment_event(conn, payment["id"], "started", {"method": method})
     return {"payment_id": str(payment["id"]), "redirect_url": redirect_url}
+
+
+def _start_eps(
+    conn: Connection, me: Applicant, config: Any, payment: RowMapping, phone: str, ip: str, api: str
+) -> tuple[str, str]:
+    """Start at EPS. EPS sometimes refuses a valid start (ErrorCode 500): up to two retries, a
+    second apart, each with a new tran_id, since nothing was created at EPS (spec B26 Decisions
+    3c; three attempts in all since B27)."""
+    account = me.account
+    customer = eps.Customer(
+        name=account["name"], email=_payer_email(conn, account["email"]), phone=phone,
+        address="", city="", country=account["country"] or "",
+    )
+    tran_id = payment["tran_id"]
+    for attempt in range(EPS_START_ATTEMPTS):
+        if attempt > 0:
+            time.sleep(eps.RETRY_PAUSE)
+            tran_id = new_eps_tran_id(conn)
+            conn.execute(text("UPDATE payments SET tran_id = :t WHERE id = :id"), {"t": tran_id, "id": payment["id"]})
+        base = f"{api}/api/pay/eps/return/{tran_id}"
+        try:
+            return eps.start(
+                config, tran_id, int(payment["amount_poisha"]), payment["purpose"], customer,
+                {"success": f"{base}/success", "fail": f"{base}/fail", "cancel": f"{base}/cancel"},
+                ip, str(payment["id"]),
+            )
+        except eps.StartRefused:
+            if attempt == EPS_START_ATTEMPTS - 1:
+                raise
+    raise GatewayError("EPS could not start the payment.")  # pragma: no cover
 
 
 @router.post("/me/{module}/applications/{app_id}/pay")
@@ -245,7 +286,7 @@ async def pay_application(
         raise ApiError("CONFLICT", 409, "Self Apply is not available for this university now.")
     kind = "Self-apply fee" if app["self_apply"] else "Application fee"
     purpose = f"{kind} - {item_title(app_module, item)} ({app['ref']})"
-    return start_payment(conn, me, app_module, "application", app["id"], purpose, fee, body)
+    return start_payment(conn, me, app_module, "application", app["id"], purpose, fee, body, ip=client_ip(request) or "")
 
 
 # ---------------------------------------------------------------- payment result
@@ -266,11 +307,10 @@ def my_payment(payment_id: str, request: Request, conn: Connection = Depends(get
     me = current_applicant_row(request, conn, payment["module"])
     if me is None or me["id"] != payment["applicant_id"]:
         raise ApiError("NOT_FOUND", 404, "Payment not found.")
-    if payment["status"] == "initiated" and payment["method"] == "bkash":
+    if payment["status"] == "initiated" and payment["method"] in ("bkash", "eps"):
         # The next status check can finish a payment whose callback was lost.
-        payment = bkash_status(conn, conn.execute(
-            text("SELECT * FROM payments WHERE id = :id FOR UPDATE"), {"id": uid}
-        ).mappings().one())
+        locked = conn.execute(text("SELECT * FROM payments WHERE id = :id FOR UPDATE"), {"id": uid}).mappings().one()
+        payment = bkash_status(conn, locked) if payment["method"] == "bkash" else eps_status(conn, locked)
     return _payment_view(conn, payment)
 
 
@@ -450,4 +490,23 @@ def bkash_callback(
         record_end(conn, payment["id"], "cancelled", "gateway_cancel", {"source": "bkash callback"})
     else:
         record_end(conn, payment["id"], "failed", "gateway_fail", {"source": "bkash callback", "status": status[:20]})
+    return _result_redirect(payment["id"])
+
+
+@router.get("/pay/eps/return/{tran_id}/{outcome}")
+def eps_return(tran_id: str, outcome: str, request: Request, conn: Connection = Depends(get_conn)) -> RedirectResponse:
+    """The payer's browser coming back from EPS. The outcome in the address is never trusted on
+    its own: EPS is always asked for the status first (spec B26)."""
+    if outcome not in EPS_OUTCOMES:
+        raise _not_found_callback("EPS outcome")
+    payment = conn.execute(
+        text("SELECT * FROM payments WHERE tran_id = :t AND method = 'eps' FOR UPDATE"), {"t": tran_id[:30]}
+    ).mappings().one_or_none()
+    if payment is None:
+        raise _not_found_callback("EPS tran_id")
+    query = {k: v[:200] for k, v in list(request.query_params.items())[:30]}
+    config = gateway_config(conn, "eps")
+    secret_values = (*(config.secrets.values() if config else ()), *eps.known_tokens())
+    payment_event(conn, payment["id"], "eps_return", {"outcome": outcome, "query": query}, secret_values)
+    eps_status(conn, payment, outcome)
     return _result_redirect(payment["id"])

@@ -32,6 +32,8 @@ export type AgentConfig = {
   noMatch: string;
   // Shown when a choice list is empty (nothing published yet).
   nothingOpen: string;
+  // The heading a result goes under. Results come best first, so headings keep that order.
+  group?: (match: MatchView) => string;
 };
 
 // A match as the widget and the item page show it.

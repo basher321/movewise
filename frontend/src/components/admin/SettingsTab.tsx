@@ -101,6 +101,14 @@ const BKASH: Def[] = [
   secret("Password", "bkash_pass"),
   check("Sandbox (test) mode", (s) => s.gateways.bkash.sandbox, (s, v) => { s.gateways.bkash.sandbox = v; }),
 ];
+const EPS: Def[] = [
+  check("Enable EPS (cards, bKash, Nagad, Rocket and other wallets, internet banking)", (s) => s.gateways.eps.enabled, (s, v) => { s.gateways.eps.enabled = v; }),
+  secret("Store ID", "eps_store"),
+  secret("Username", "eps_user"),
+  secret("Password", "eps_pass"),
+  secret("Hash key", "eps_hash"),
+  check("Sandbox (test) mode", (s) => s.gateways.eps.sandbox, (s, v) => { s.gateways.eps.sandbox = v; }),
+];
 const MANUAL: Def[] = [
   check("Allow bank transfer / office payment (finance verifies it)", (s) => s.gateways.manual.enabled, (s, v) => { s.gateways.manual.enabled = v; }),
   text("Instructions shown to the payer (account number, bKash merchant number…)", (s) => s.gateways.manual.instructions, (s, v) => { s.gateways.manual.instructions = v; }, { area: 2, full: true }),
@@ -372,6 +380,8 @@ export default function SettingsTab({ toast }: { toast: ShowToast }) {
           {grid(SSL)}
           <h4 style={{ margin: "18px 0 10px" }}>bKash</h4>
           {grid(BKASH)}
+          <h4 style={{ margin: "18px 0 10px" }}>EPS</h4>
+          {grid(EPS)}
           <h4 style={{ margin: "18px 0 10px" }}>Offline payment</h4>
           {grid(MANUAL)}
         </Section>

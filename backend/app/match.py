@@ -180,7 +180,17 @@ def match_visa(conn: Connection, data: VisaInput) -> list[dict[str, Any]]:
     return results
 
 
+def _study_rank(result: dict[str, Any]) -> tuple[int, bool, bool, int, str]:
+    """More criteria first; among equals the chosen field, then the level, then the lowest tuition."""
+    level_ok, field_ok = result["checks"][0]["ok"], result["checks"][1]["ok"]
+    item = result["item"]
+    return (-result["match_percent"], not field_ok, not level_ok, item["tuition_usd"], item["name"])
+
+
 def match_study(conn: Connection, data: StudyInput) -> list[dict[str, Any]]:
+    """Every published university that meets at least one of the five criteria, best first.
+
+    The criteria count equally, so match_percent rises with the number met."""
     fee = default_fees(conn)["study"]
     level, field = data.level.strip(), data.field.strip()
     country = data.country.strip()
@@ -188,30 +198,27 @@ def match_study(conn: Connection, data: StudyInput) -> list[dict[str, Any]]:
     for u in public_universities(conn):
         if country and country != ANY_COUNTRY and u["country"] != country:
             continue
-        if level not in u["levels"] or field not in u["fields"]:
-            continue
         gpa, ielts = number_text(u["min_gpa"]), number_text(u["min_ielts"])
-        results.append(
-            _score(
-                university_view(u, fee),
-                [
-                    (data.gpa >= float(u["min_gpa"]), f"GPA meets {gpa}", f"GPA below {gpa}", 2),
-                    (
-                        data.ielts >= float(u["min_ielts"]),
-                        f"IELTS meets {ielts}",
-                        f"IELTS below {ielts}" if data.ielts else f"IELTS {ielts} needed",
-                        2,
-                    ),
-                    (
-                        data.budget_usd >= u["tuition_usd"],
-                        "Within budget",
-                        f"Above budget (~{usd(u['tuition_usd'])})",
-                        1.5,
-                    ),
-                ],
-            )
-        )
-    results.sort(key=lambda r: -r["match_percent"])
+        checks: list[Check] = [
+            (level in u["levels"], f"{level} offered", f"{level} not offered", 1),
+            (field in u["fields"], f"{field} offered", f"{field} not offered", 1),
+            (data.gpa >= float(u["min_gpa"]), f"GPA meets {gpa}", f"GPA below {gpa}", 1),
+            (
+                data.ielts >= float(u["min_ielts"]),
+                f"IELTS meets {ielts}",
+                f"IELTS below {ielts}" if data.ielts else f"IELTS {ielts} needed",
+                1,
+            ),
+            (
+                data.budget_usd >= u["tuition_usd"],
+                "Within budget",
+                f"Above budget (~{usd(u['tuition_usd'])})",
+                1,
+            ),
+        ]
+        if any(ok for ok, _, _, _ in checks):
+            results.append(_score(university_view(u, fee), checks))
+    results.sort(key=_study_rank)
     return results
 
 
@@ -458,6 +465,11 @@ def _overview_answer(conn: Connection, module: AgentModule, q: str, items: list[
 def agent_answer(conn: Connection, module: AgentModule, question: str, inputs: dict[str, Any] | None) -> str:
     q = question.lower()
     results = _agent_matches(conn, module, inputs)
+    if module == "study":
+        # Nearly every university is in the results now, so a university the student names comes first.
+        named_first = _named_item(module, q, _public_items(conn, module))
+        if named_first is not None:
+            results = [{"item": named_first, "match_percent": None}]
     if not results:
         # No form match: an item named in the question, or an overview from the database.
         items = _public_items(conn, module)

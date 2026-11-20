@@ -332,12 +332,13 @@ export default function ApplicationPage({ module, slug: id }: { module: AppModul
             </button>
           </p>
         ) : null}
-        <p style={{ marginBottom: config.apply.hasLink ? 16 : 0 }}>
+        <p style={{ marginBottom: selfMode && config.apply.hasLink ? 16 : 0 }}>
           {selfMode
             ? "Apply on the university website by yourself. Our team does not process or track a Self Apply."
             : config.apply.paidText}
         </p>
-        {config.apply.hasLink ? (
+        {/* Only Self Apply gets the university's own link; with Agent Apply our team applies. */}
+        {selfMode && config.apply.hasLink ? (
           detail.apply_link && /^https?:\/\//.test(detail.apply_link) ? (
             <a className="btn" href={detail.apply_link} target="_blank" rel="noopener">
               {config.apply.linkButton}

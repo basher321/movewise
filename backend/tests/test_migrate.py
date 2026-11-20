@@ -43,3 +43,13 @@ def test_crlf_checkout_is_not_a_change(test_url: str, migrated_db: None, tmp_pat
     lf = source.read_bytes().replace(b"\r\n", b"\n")
     (tmp_path / source.name).write_bytes(lf.replace(b"\n", b"\r\n"))
     assert run_migrations(test_url, tmp_path, log=lambda _: None) == []
+
+
+def test_pgcrypto_line_is_left_out_only_when_asked(tmp_path: Path) -> None:
+    from app.db.migrate import migration_sql
+
+    path = tmp_path / "0001_x.sql"
+    path.write_text("-- a\nCREATE EXTENSION IF NOT EXISTS pgcrypto;\nCREATE TABLE t (id uuid DEFAULT gen_random_uuid());\n", encoding="utf-8")
+    assert "pgcrypto" in migration_sql(path, skip_pgcrypto=False)
+    kept = migration_sql(path, skip_pgcrypto=True)
+    assert "pgcrypto" not in kept and "CREATE TABLE t" in kept

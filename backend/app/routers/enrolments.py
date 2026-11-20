@@ -196,7 +196,8 @@ async def enrol(
     purpose = f"Course - {course['title']} ({enrolment['order_no']})"
     # The price was locked when the enrolment was created; start_payment writes the audit row.
     started = start_payment(
-        conn, me, "course", "enrolment", enrolment["id"], purpose, int(enrolment["price_poisha"]), body
+        conn, me, "course", "enrolment", enrolment["id"], purpose, int(enrolment["price_poisha"]), body,
+        ip=client_ip(request) or "",
     )
     row = conn.execute(text(_SELECT + "WHERE e.id = :id"), {"id": enrolment["id"]}).mappings().one()
     return {"enrolment": _view(row), **started}

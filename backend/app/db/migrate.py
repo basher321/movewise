@@ -49,6 +49,26 @@ def checksum(path: Path) -> str:
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
+# 0001 adds pgcrypto only for gen_random_uuid(), which PostgreSQL has built in since version 13.
+# Some hosts (cPanel) do not ship pgcrypto, so there that one statement is left out. The file and
+# its checksum stay as they are.
+_PGCRYPTO = "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+
+
+def _skip_pgcrypto(conn: psycopg.Connection) -> bool:
+    version = int(conn.execute("SHOW server_version_num").fetchone()[0])  # type: ignore[index]
+    available = conn.execute("SELECT count(*) FROM pg_available_extensions WHERE name = 'pgcrypto'").fetchone()
+    conn.commit()
+    return version >= 130000 and available is not None and int(available[0]) == 0
+
+
+def migration_sql(path: Path, skip_pgcrypto: bool) -> str:
+    sql = path.read_text(encoding="utf-8")
+    if skip_pgcrypto:
+        sql = "\n".join(line for line in sql.split("\n") if line.strip() != _PGCRYPTO)
+    return sql
+
+
 def _applied(conn: psycopg.Connection) -> dict[str, str]:
     row = conn.execute("SELECT to_regclass('public.schema_migrations')").fetchone()
     if row is None or row[0] is None:
@@ -74,11 +94,12 @@ def run_migrations(
                     f"Applied migration {path.name} has changed. Add a new migration instead."
                 )
 
+        skip_pgcrypto = _skip_pgcrypto(conn)
         for path in files:
             if path.name in applied:
                 continue
             try:
-                conn.execute(path.read_text(encoding="utf-8"))  # type: ignore[call-overload]
+                conn.execute(migration_sql(path, skip_pgcrypto))  # type: ignore[call-overload]
                 conn.execute(
                     "INSERT INTO schema_migrations (filename, checksum) VALUES (%s, %s)",
                     (path.name, checksum(path)),

@@ -82,7 +82,7 @@ def test_full_settings_show_secrets_only_as_saved(client: TestClient, act_as: Ca
         body["mail"]["smtp_password"],
         body["whatsapp"]["token"],
     ]
-    assert len(secrets) == 10
+    assert len(secrets) == 14  # B26 added the four EPS secrets
     assert all(isinstance(s, dict) and set(s) == {"saved"} for s in secrets)
 
 

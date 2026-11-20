@@ -19,6 +19,7 @@ from app.countries import WORLD_COUNTRIES
 from app.auth.deps import client_ip, current_applicant_row, ensure_licensed, require_module
 from app.catalog import (
     ANY_COUNTRY,
+    BASE_OCCUPATIONS,
     BASE_STUDY_LEVELS,
     COURSE_SELECT,
     EDUCATION_LEVELS,
@@ -311,6 +312,9 @@ def catalog_options(conn: Connection = Depends(get_conn)) -> dict[str, list[str]
     vacancies = public_vacancies(conn) if job else []
     programs = public_visa_programs(conn) if visa else []
     remote_jobs = public_remote_jobs(conn) if remote else []
+    # Occupations with an open job come first: the form starts on the first one, so the first
+    # search finds a job whenever there is one.
+    open_occupations = sorted({v["occupation"] for v in vacancies})
     visa_types_used = {p["visa_type"] for p in programs}
     levels = [lv for u in universities for lv in u["levels"]]
     used_levels = [lv for lv in BASE_STUDY_LEVELS if lv in levels]
@@ -319,7 +323,7 @@ def catalog_options(conn: Connection = Depends(get_conn)) -> dict[str, list[str]
         "study_fields": sorted({f for u in universities for f in u["fields"]}),
         # Only the countries that have a published university.
         "study_countries": [ANY_COUNTRY, *sorted({u["country"] for u in universities}, key=str.casefold)] if study else [],
-        "occupations": sorted({v["occupation"] for v in vacancies}),
+        "occupations": [*open_occupations, *(o for o in BASE_OCCUPATIONS if o not in open_occupations)] if job else [],
         # Every country (plus any other country a vacancy uses), so applicants can pick any destination.
         "countries": [ANY_COUNTRY, *sorted(set(WORLD_COUNTRIES) | {v["country"] for v in vacancies}, key=str.casefold)] if job else [],
         "education_levels": list(EDUCATION_LEVELS) if job or remote else [],

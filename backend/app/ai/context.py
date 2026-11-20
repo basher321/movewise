@@ -171,10 +171,16 @@ def build_facts(
                 percent[r["id"]] = m["match_percent"]
     words = _words(question)
     if words:
+        named = set()
         for r in rows:
             haystack = _searchable(module, r)
-            if r["id"] not in chosen and any(w in haystack for w in words):
-                chosen.append(r["id"])
+            if any(w in haystack for w in words):
+                named.add(r["id"])
+                if r["id"] not in chosen:
+                    chosen.append(r["id"])
+        if module == "study":
+            # Nearly every university matches the form, so what the question names must fit under MAX_ROWS.
+            chosen.sort(key=lambda rid: rid not in named)
     specific = bool(chosen)
     if not chosen:
         # No match for the form or the question: a short overview of what is offered.

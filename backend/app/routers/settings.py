@@ -37,6 +37,8 @@ GATEWAY_SECRETS: dict[str, tuple[str, ...]] = {
     "sslcommerz": ("store_id", "store_password"),
     "bkash": ("app_key", "app_secret", "username", "password"),
     "nagad": ("merchant_id", "private_key"),
+    # B26: stored in app_secrets (its name rule already allows them).
+    "eps": ("store_id", "username", "password", "hash_key"),
 }
 # B08: the SMTP password replaces the old mail API key (that stored row is no longer used).
 OTHER_SECRETS: dict[str, tuple[str, ...]] = {"mail": ("smtp_password",), "whatsapp": ("token",)}
@@ -46,7 +48,7 @@ SECRET_NAMES: tuple[str, ...] = tuple(
     for group, fields in groups.items()
     for field in fields
 )
-GATEWAY_LABELS = {"sslcommerz": "SSLCommerz", "bkash": "bKash", "nagad": "Nagad"}
+GATEWAY_LABELS = {"sslcommerz": "SSLCommerz", "bkash": "bKash", "nagad": "Nagad", "eps": "EPS"}
 SECRET_LABELS = {
     "store_id": "store id",
     "store_password": "store password",
@@ -56,6 +58,7 @@ SECRET_LABELS = {
     "password": "password",
     "merchant_id": "merchant id",
     "private_key": "private key",
+    "hash_key": "hash key",
 }
 
 # settings column -> field path in the API, used to list changed fields in the audit row.
@@ -85,6 +88,8 @@ FIELD_PATHS: dict[str, str] = {
     "sslcommerz_sandbox": "gateways.sslcommerz.sandbox",
     "bkash_enabled": "gateways.bkash.enabled",
     "bkash_sandbox": "gateways.bkash.sandbox",
+    "eps_enabled": "gateways.eps.enabled",
+    "eps_sandbox": "gateways.eps.sandbox",
     "nagad_enabled": "gateways.nagad.enabled",
     "nagad_sandbox": "gateways.nagad.sandbox",
     "manual_enabled": "gateways.manual.enabled",
@@ -156,6 +161,15 @@ class NagadIn(BaseModel):
     private_key: str = ""
 
 
+class EpsIn(BaseModel):
+    enabled: bool
+    sandbox: bool
+    store_id: str = ""
+    username: str = ""
+    password: str = ""
+    hash_key: str = ""
+
+
 class ManualIn(BaseModel):
     enabled: bool
     instructions: str = ""
@@ -166,6 +180,8 @@ class GatewaysIn(BaseModel):
     bkash: BkashIn
     nagad: NagadIn
     manual: ManualIn
+    # B26: optional, so a client that does not know EPS yet keeps the saved EPS settings.
+    eps: EpsIn | None = None
 
 
 class MailIn(BaseModel):
@@ -270,6 +286,8 @@ def _columns(body: SettingsIn) -> dict[str, Any]:
         "bkash_sandbox": gw.bkash.sandbox,
         "nagad_enabled": gw.nagad.enabled,
         "nagad_sandbox": gw.nagad.sandbox,
+        "eps_enabled": gw.eps.enabled if gw.eps else None,
+        "eps_sandbox": gw.eps.sandbox if gw.eps else None,
         "manual_enabled": gw.manual.enabled,
         "manual_instructions": gw.manual.instructions,
         "mail_sender_name": body.mail.sender_name,
@@ -291,8 +309,13 @@ def _sent_secrets(body: SettingsIn) -> dict[str, str]:
     """Secret values sent in this request. Empty or missing means keep the stored value."""
     values: dict[str, str] = {}
     for group, fields in GATEWAY_SECRETS.items():
+        block = getattr(body.gateways, group)
+        if block is None:
+            continue
         for field in fields:
-            values[f"{group}.{field}"] = getattr(getattr(body.gateways, group), field)
+            value = getattr(block, field)
+            # B26: pasted EPS keys often carry spaces at either end.
+            values[f"{group}.{field}"] = value.strip() if group == "eps" else value
     values["mail.smtp_password"] = body.mail.smtp_password
     values["whatsapp.token"] = body.whatsapp.token
     return {name: value for name, value in values.items() if value}
@@ -310,7 +333,7 @@ def _invalid(message: str) -> ApiError:
     return ApiError("VALIDATION", 422, message)
 
 
-def _validate(body: SettingsIn, available_secrets: set[str]) -> None:
+def _validate(body: SettingsIn, available_secrets: set[str], eps_saved_on: bool = False) -> None:
     if not body.name.strip():
         raise _invalid("Please fill in: Company name.")
     if not COLOR_RE.fullmatch(body.brand_color):
@@ -352,10 +375,16 @@ def _validate(body: SettingsIn, available_secrets: set[str]) -> None:
     ):
         raise _invalid("Default fees must be whole numbers of poisha above 0.")
     gw = body.gateways
-    if not (gw.sslcommerz.enabled or gw.bkash.enabled or gw.nagad.enabled or gw.manual.enabled):
+    eps_on = gw.eps.enabled if gw.eps is not None else eps_saved_on
+    if gw.eps is not None:
+        for field in GATEWAY_SECRETS["eps"]:
+            if len(getattr(gw.eps, field).strip()) > 500:
+                raise _invalid(f"EPS {SECRET_LABELS[field]} is too long.")
+    if not (gw.sslcommerz.enabled or gw.bkash.enabled or gw.nagad.enabled or gw.manual.enabled or eps_on):
         raise _invalid("Please turn on at least one payment method.")
     for group, fields in GATEWAY_SECRETS.items():
-        if getattr(gw, group).enabled:
+        block = getattr(gw, group)
+        if block is not None and block.enabled:
             missing = [SECRET_LABELS[f] for f in fields if f"{group}.{f}" not in available_secrets]
             if missing:
                 raise _invalid(f"{GATEWAY_LABELS[group]} needs: {', '.join(missing)}.")
@@ -527,6 +556,7 @@ def _public_view(row: RowMapping) -> dict[str, Any]:
             "sslcommerz": {"enabled": row["sslcommerz_enabled"], "sandbox": row["sslcommerz_sandbox"]},
             "bkash": {"enabled": row["bkash_enabled"], "sandbox": row["bkash_sandbox"]},
             "nagad": {"enabled": row["nagad_enabled"], "sandbox": row["nagad_sandbox"]},
+            "eps": {"enabled": row["eps_enabled"], "sandbox": row["eps_sandbox"]},
             "manual": {"enabled": row["manual_enabled"], "instructions": row["manual_instructions"]},
         },
         "mail": {"sender_name": row["mail_sender_name"], "sender_email": row["mail_sender_email"]},
@@ -595,7 +625,7 @@ async def save_settings(
     old = _settings_row(conn)
     sent = _sent_secrets(body)
     available = {name for name, status in _secret_status(conn).items() if status["saved"]} | set(sent)
-    _validate(body, available)
+    _validate(body, available, bool(old["eps_enabled"]))
     ai_keys = _ai_sent_keys(body.ai)
     ai_value = None
     if body.ai is not None:
@@ -606,6 +636,9 @@ async def save_settings(
         columns["default_fee_visa_poisha"] = old["default_fee_visa_poisha"]
     if columns["default_fee_remote_poisha"] is None:
         columns["default_fee_remote_poisha"] = old["default_fee_remote_poisha"]
+    for column in ("eps_enabled", "eps_sandbox"):
+        if columns[column] is None:
+            columns[column] = old[column]
     conn.execute(_UPDATE_SETTINGS, columns)
     for name, value in sent.items():
         save_secret(conn, name, value)

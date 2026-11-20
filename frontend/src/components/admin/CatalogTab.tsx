@@ -18,6 +18,7 @@ import {
   saveVacancy,
   saveRemoteJob,
   saveVisaProgram,
+  verifyVacancies,
   VISA_TYPE_LABELS,
   VISA_TYPES,
   REMOTE_SKILLS,
@@ -183,6 +184,9 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [error, setError] = useState("");
+  // B24: quick verify of vacancies.
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -216,6 +220,42 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
     void load();
   }
 
+  // B24: open vacancies whose employer is not verified yet (Job Processing only).
+  const toVerify = shown === "job" && jobs && jobsPart === "job" ? jobs.filter((j) => !j.employer_verified && !j.closed) : [];
+
+  async function verify(ids: string[]) {
+    if (verifying) return;
+    setVerifying(true);
+    try {
+      const { verified } = await verifyVacancies(ids);
+      setConfirmAll(false);
+      toast(verified === 1 ? "1 employer verified. The job is now on the website." : verified + " employers verified. The jobs are now on the website.");
+      await load();
+    } catch (err) {
+      handleFailure(err, () => toast(errorText(err), true), onSignedOut);
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  const verifyActions =
+    toVerify.length === 0 ? null : confirmAll ? (
+      <>
+        <button className="btn sm" type="button" disabled={verifying} onClick={() => void verify(toVerify.map((j) => j.id))}>
+          {verifying ? "Verifying…" : "Yes, verify " + toVerify.length}
+        </button>{" "}
+        <button className="btn ghost sm" type="button" disabled={verifying} onClick={() => setConfirmAll(false)}>
+          Cancel
+        </button>{" "}
+      </>
+    ) : (
+      <>
+        <button className="btn ghost sm" type="button" onClick={() => setConfirmAll(true)}>
+          Verify all ({toVerify.length})
+        </button>{" "}
+      </>
+    );
+
   const actions =
     shown === "uni" || shown === "job" || shown === "rmt" || shown === "visa" ? (
       <button className="btn sm" type="button" onClick={() => setEditing({ part: shown, item: null })}>
@@ -233,17 +273,31 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
     ) : null;
 
   return (
-    <TabPage title="Catalog" sub="What applicants see on the website and in the AI agents' matching. Nothing is deleted: hide or close it instead." actions={actions}>
+    <TabPage title="Catalog" sub="What applicants see on the website and in the AI agents' matching. Nothing is deleted: hide or close it instead." actions={<>{verifyActions}{actions}</>}>
       <div
         className="seg"
         style={{ maxWidth: parts.length * 190, gridTemplateColumns: "repeat(auto-fit,minmax(min(170px,100%),1fr))", marginBottom: 20, borderRadius: 22 }}
       >
         {parts.map(([p, label]) => (
-          <button key={p} type="button" role="tab" aria-selected={shown === p} onClick={() => setPart(p)}>
+          <button
+            key={p}
+            type="button"
+            role="tab"
+            aria-selected={shown === p}
+            onClick={() => {
+              setPart(p);
+              setConfirmAll(false);
+            }}
+          >
             {label}
           </button>
         ))}
       </div>
+      {confirmAll && toVerify.length > 0 ? (
+        <div className="banner">
+          {toVerify.length === 1 ? "1 open job" : toVerify.length + " open jobs"} will go live on the website as verified employers. Confirm only if you have checked these employers.
+        </div>
+      ) : null}
       {shown === "crs" && groups ? (
         <div className="card" style={{ marginBottom: 18 }}>
           <h3>Course groups</h3>
@@ -351,7 +405,22 @@ export default function CatalogTab({ licence, toast, onSignedOut }: Props) {
                     </>
                   ),
               },
-              { head: "", right: true, cell: (j) => <EditButton onClick={() => setEditing({ part: shown === "rmt" ? "rmt" : "job", item: j })} /> },
+              {
+                head: "",
+                right: true,
+                cell: (j) => (
+                  <>
+                    {shown === "job" && !j.employer_verified && !j.closed ? (
+                      <>
+                        <button className="lk" type="button" disabled={verifying} onClick={() => void verify([j.id])}>
+                          Verify
+                        </button>{" "}
+                      </>
+                    ) : null}
+                    <EditButton onClick={() => setEditing({ part: shown === "rmt" ? "rmt" : "job", item: j })} />
+                  </>
+                ),
+              },
             ]}
           />
         ) : null}

@@ -101,9 +101,18 @@ export default function PaymentCheckout({ amount_poisha, purpose, onPay, onDone 
           </p>
         </>
       ) : (
-        <p className="sub" style={{ margin: 0, fontSize: 13 }}>
-          You will pay on the secure {METHOD_NAMES[method]} page and then come back here.
-        </p>
+        <>
+          {method === "eps" ? (
+            // B26: the EPS checkout badge from the EPS merchant kit.
+            // eslint-disable-next-line @next/next/no-img-element -- fixed partner artwork
+            <img src="/payments/eps/checkout.png" alt="Pay with EPS" style={{ display: "block", width: "100%", maxWidth: 360, height: "auto" }} />
+          ) : null}
+          <p className="sub" style={{ margin: 0, fontSize: 13 }}>
+            {method === "eps"
+              ? "You will pay on the secure EPS page (card, bKash, Nagad, Rocket and other wallets, or internet banking) and then come back here."
+              : "You will pay on the secure " + METHOD_NAMES[method] + " page and then come back here."}
+          </p>
+        </>
       )}
       <p className="err" role="alert">
         {error}

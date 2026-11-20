@@ -17,6 +17,7 @@ import {
   type GroupPreview,
   type Module,
 } from "@/lib/api";
+import { whatsappLink } from "@/lib/admin/whatsapp";
 import Modal from "../Modal";
 import { errorText } from "../auth/messages";
 import { TextField } from "./Field";
@@ -79,6 +80,7 @@ export function MessageDialog({ accountId, name, email, phone, subject: s0 = "",
   const [body, setBody] = useState(b0 ?? "Dear " + name + ",\n\n\n");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const chatLink = whatsappLink(phone, [subject.trim(), body.trim()].filter(Boolean).join("\n\n"));
 
   async function send(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -113,6 +115,11 @@ export function MessageDialog({ accountId, name, email, phone, subject: s0 = "",
           <button className="btn" type="submit" disabled={busy}>
             Send
           </button>
+          {chatLink ? (
+            <a className="btn ghost" href={chatLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+              Open in WhatsApp
+            </a>
+          ) : null}
           <button className="btn ghost" type="button" onClick={onClose}>
             Cancel
           </button>

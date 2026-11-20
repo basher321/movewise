@@ -25,6 +25,9 @@ FeeModule = Literal["study", "job", "visa", "remote"]
 EDUCATION_LEVELS = ("Below SSC", "SSC / HSC", "Diploma", "Bachelor or higher")
 ENGLISH_LEVELS = ("Basic", "Good", "Fluent")
 BASE_STUDY_LEVELS = ("Foundation", "Diploma", "Bachelor", "Master", "PhD")
+# Job Processing agent form: the occupations of the reference, always offered (the occupations of
+# open, verified vacancies come before them).
+BASE_OCCUPATIONS = ("Construction", "Healthcare", "Hospitality", "Technology")
 # Remote Jobs agent form: common remote skills, always offered (the skills of open remote roles are
 # added after them). A remote role matches when its occupation is the chosen skill.
 REMOTE_SKILLS = (

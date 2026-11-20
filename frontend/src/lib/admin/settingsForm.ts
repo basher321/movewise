@@ -46,6 +46,26 @@ const SECRETS = {
     set: (s, v) => { s.gateways.bkash.password = v; },
     saved: (s) => s.gateways.bkash.password.saved,
   },
+  eps_store: {
+    get: (s) => s.gateways.eps.store_id,
+    set: (s, v) => { s.gateways.eps.store_id = v; },
+    saved: (s) => s.gateways.eps.store_id.saved,
+  },
+  eps_user: {
+    get: (s) => s.gateways.eps.username,
+    set: (s, v) => { s.gateways.eps.username = v; },
+    saved: (s) => s.gateways.eps.username.saved,
+  },
+  eps_pass: {
+    get: (s) => s.gateways.eps.password,
+    set: (s, v) => { s.gateways.eps.password = v; },
+    saved: (s) => s.gateways.eps.password.saved,
+  },
+  eps_hash: {
+    get: (s) => s.gateways.eps.hash_key,
+    set: (s, v) => { s.gateways.eps.hash_key = v; },
+    saved: (s) => s.gateways.eps.hash_key.saved,
+  },
   smtp_pass: {
     get: (s) => s.mail.smtp_password,
     set: (s, v) => { s.mail.smtp_password = v; },
@@ -103,6 +123,7 @@ export function toForm(s: Settings): SettingsInput {
       bkash: { enabled: g.bkash.enabled, sandbox: g.bkash.sandbox, app_key: "", app_secret: "", username: "", password: "" },
       // Nagad is paid inside SSLCommerz; its own section is not shown and stays as stored.
       nagad: { enabled: g.nagad.enabled, sandbox: g.nagad.sandbox, merchant_id: "", private_key: "" },
+      eps: { enabled: g.eps.enabled, sandbox: g.eps.sandbox, store_id: "", username: "", password: "", hash_key: "" },
       manual: { ...g.manual },
     },
     mail: {
@@ -169,7 +190,7 @@ export function validateSettings(form: SettingsInput, stored: Settings): string 
     return "The webmail link must start with https:// (for example https://webmail.example.com).";
   }
   const g = form.gateways;
-  if (!g.sslcommerz.enabled && !g.bkash.enabled && !g.nagad.enabled && !g.manual.enabled) return "Turn on at least one payment method.";
+  if (!g.sslcommerz.enabled && !g.bkash.enabled && !g.nagad.enabled && !g.eps.enabled && !g.manual.enabled) return "Turn on at least one payment method.";
   const need = (gateway: string, fields: [string, SecretKey][]): string | null => {
     const missing = fields.filter(([, key]) => !secretOf(form, key).trim() && !secretSaved(stored, key)).map(([label]) => label);
     return missing.length ? gateway + " is turned on: please fill in " + missingList(missing) + "." : null;
@@ -180,6 +201,10 @@ export function validateSettings(form: SettingsInput, stored: Settings): string 
   }
   if (g.bkash.enabled) {
     const e = need("bKash", [["App key", "bkash_key"], ["App secret", "bkash_secret"], ["Username", "bkash_user"], ["Password", "bkash_pass"]]);
+    if (e) return e;
+  }
+  if (g.eps.enabled) {
+    const e = need("EPS", [["Store ID", "eps_store"], ["Username", "eps_user"], ["Password", "eps_pass"], ["Hash key", "eps_hash"]]);
     if (e) return e;
   }
   return validateAi(form, stored);

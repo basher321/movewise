@@ -39,6 +39,7 @@ import { configOf } from "../modules";
 import Modal from "../Modal";
 import { useSettings } from "../SettingsProvider";
 import { errorText } from "../auth/messages";
+import { StaffCustomPayments } from "../payment/CustomPayments";
 import InvoiceDialog from "../payment/InvoiceDialog";
 import AdminTable from "./AdminTable";
 import CaseAgentDialog from "./CaseAgentDialog";
@@ -47,6 +48,7 @@ import { RejectDocDialog, VerifyDocDialog } from "./DocReviewDialogs";
 import { TextField } from "./Field";
 import TabPage from "./TabPage";
 import ResetPasswordButton from "./ResetPasswordButton";
+import WhatsAppLink from "./WhatsAppLink";
 import { handleFailure } from "./failure";
 import type { ShowToast } from "./Toast";
 
@@ -241,7 +243,9 @@ export default function CasesTab({ module, admin, toast, onSignedOut }: Props) {
               cell: (a) => (
                 <>
                   {a.email || "–"}
-                  <small>{a.phone || "–"}</small>
+                  <small>
+                    {a.phone || "–"} <WhatsAppLink phone={a.phone} name={a.name} />
+                  </small>
                 </>
               ),
             },
@@ -477,7 +481,9 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
         </div>
         <div>
           <span>Phone</span>
-          <b>{r.applicant.phone || "–"}</b>
+          <b>
+            {r.applicant.phone || "–"} <WhatsAppLink phone={r.applicant.phone} name={r.applicant.name} />
+          </b>
         </div>
         <div>
           <span>{module === "study" ? "University" : module === "visa" ? "Embassy" : "Employer"} email</span>
@@ -592,6 +598,8 @@ function CaseCard({ row: r, module, admin, staff, toast, onChanged, onFail, onSi
           )}
         </form>
       ) : null}
+
+      <StaffCustomPayments module={module} caseId={r.id} toast={toast} onSignedOut={onSignedOut} />
 
       <form noValidate onSubmit={(e) => void saveCase(e)} style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 14 }}>
         <div className="fgrid">

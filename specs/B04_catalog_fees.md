@@ -38,14 +38,17 @@ Public (P) - module must be licensed, otherwise 403 MODULE_NOT_LICENSED:
 - GET /universities, GET /universities/{slug} only published.
 - GET /vacancies, GET /vacancies/{slug}       only open (not closed) with employer_verified.
 - Every public university and vacancy includes fee_poisha = effective fee.
-- POST /match/study {level, field, gpa, ielts, budget_usd}
+- POST /match/study {level, field, gpa, ielts, budget_usd, country?}
+  country is optional. Empty or "Any country" means no country filter; any other value returns
+  only universities in that country.
 - POST /match/job {occupation, country, experience, education, english, passport_ready,
   salary_goal_usd}
   Both return [{item, checks: [{ok, label}], match_percent}] sorted by match_percent, highest first.
 - POST /agent/{module}/ask {question, inputs} -> {answer} (rule-based for now, same replies as
   the reference fallback).
-- GET /catalog/options -> {study_levels, study_fields, occupations, countries, education_levels,
-  english_levels} built from published data plus the fixed lists, for the agent forms.
+- GET /catalog/options -> {study_levels, study_fields, study_countries, occupations, countries,
+  education_levels, english_levels} built from published data plus the fixed lists, for the agent
+  forms. study_countries is "Any country" followed by the countries with a published university.
 Admin (SA, module licensed):
 - GET /admin/course-groups, POST /admin/course-groups, PUT /admin/course-groups/{id}
 - GET /admin/courses, POST /admin/courses, PUT /admin/courses/{id}

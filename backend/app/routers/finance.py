@@ -23,7 +23,16 @@ from app.errors import ApiError, parse_body
 from app.licence import MODULES, read_licence, today_dhaka
 from app.payments.invoices import METHOD_LABELS, invoice_view
 from app.payments.ledger import CATEGORIES, CATEGORY_LABELS, add_entry
-from app.payments.service import ON_REFUNDED, lock_payment, mark_paid, money_text, notify_person, payment_event
+from app.payments.service import (
+    ON_REFUNDED,
+    application_id_of,
+    lock_payment,
+    mark_paid,
+    money_text,
+    notify_person,
+    payment_ended,
+    payment_event,
+)
 from app.routers.pay import _email_status, refund_view
 
 router = APIRouter()
@@ -123,6 +132,7 @@ async def reject_payment(
         {"n": reason, "by": actor.id, "id": payment["id"]},
     )
     payment_event(conn, payment["id"], "rejected", {"reason": reason, "by": actor.name})
+    payment_ended(conn, lock_payment(conn, payment["id"]))
     notify_person(
         conn,
         payment["applicant_id"],
@@ -131,7 +141,7 @@ async def reject_payment(
         "We could not confirm your payment",
         f"Your payment of {money_text(payment['amount_poisha'])} for {payment['purpose']} could not be confirmed.\n\n"
         f"Reason: {reason}\n\nYou can pay again from your profile.",
-        payment["ref_id"] if payment["ref_type"] == "application" else None,
+        application_id_of(conn, payment),
     )
     write_audit(conn, actor, "payment.rejected", f"{payment['tran_id']} · {reason}")
     return {"id": str(payment["id"]), "status": "rejected"}
@@ -221,7 +231,7 @@ async def approve_refund(
         "Your refund is on its way",
         f"We refunded {money_text(refund['amount_poisha'])} for {payment['purpose']} via {method} "
         f"(reference {ref}).",
-        payment["ref_id"] if payment["ref_type"] == "application" else None,
+        application_id_of(conn, payment),
     )
     write_audit(conn, actor, "refund.approved", f"{refund['invoice_no'] or payment['tran_id']} · {money_text(refund['amount_poisha'])}")
     return refund_view(row)
@@ -250,7 +260,7 @@ async def decline_refund(
         "refund_declined",
         "About your refund request",
         f"Your refund request for {payment['purpose']} was declined.\n\nReason: {reason}",
-        payment["ref_id"] if payment["ref_type"] == "application" else None,
+        application_id_of(conn, payment),
     )
     write_audit(conn, actor, "refund.declined", f"{refund['invoice_no'] or payment['tran_id']}")
     return refund_view(row)

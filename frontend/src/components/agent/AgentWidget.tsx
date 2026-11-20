@@ -31,6 +31,16 @@ function shown(f: AgentField, x: unknown): string {
   return x === null || x === undefined ? "" : String(x);
 }
 
+// The results under their headings, in result order; one untitled section when there are no headings.
+function sections(results: MatchView[], group: AgentConfig["group"]): { title: string; items: MatchView[] }[] {
+  const byTitle = new Map<string, MatchView[]>();
+  for (const m of results) {
+    const title = group ? group(m) : "";
+    byTitle.set(title, [...(byTitle.get(title) ?? []), m]);
+  }
+  return [...byTitle].map(([title, items]) => ({ title, items }));
+}
+
 // The agent section (mountAgent() in the reference): the input form, the chat card and the results.
 export default function AgentWidget({ module, config, onSelect }: AgentWidgetProps) {
   const [options, setOptions] = useState<CatalogOptions | null>(null);
@@ -235,25 +245,34 @@ export default function AgentWidget({ module, config, onSelect }: AgentWidgetPro
           <>
             <h3 className="rh">{results.length ? config.resultsHeading(results.length) : "No match yet"}</h3>
             {results.length ? (
-              <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))" }}>
-                {results.map((m) => (
-                  <div className="card" key={m.id}>
-                    <div className="top">
-                      <div>
-                        <h3 style={{ margin: 0 }}>{m.name}</h3>
-                        <p>
-                          {COUNTRY_FLAGS[m.country] ?? ""} {m.country} · {m.place}
-                        </p>
+              sections(results, config.group).map((s) => (
+                <div key={s.title}>
+                  {s.title ? (
+                    <h4 style={{ fontSize: 18, margin: "26px 0 14px" }}>
+                      {s.title} ({s.items.length})
+                    </h4>
+                  ) : null}
+                  <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(min(300px,100%),1fr))" }}>
+                    {s.items.map((m) => (
+                      <div className="card" key={m.id}>
+                        <div className="top">
+                          <div>
+                            <h3 style={{ margin: 0 }}>{m.name}</h3>
+                            <p>
+                              {COUNTRY_FLAGS[m.country] ?? ""} {m.country} · {m.place}
+                            </p>
+                          </div>
+                          <span className="pct">{m.percent}%</span>
+                        </div>
+                        <MatchChips checks={m.checks} />
+                        <button className="btn sm" type="button" onClick={() => onSelect(m.id)}>
+                          Select &amp; view details
+                        </button>
                       </div>
-                      <span className="pct">{m.percent}%</span>
-                    </div>
-                    <MatchChips checks={m.checks} />
-                    <button className="btn sm" type="button" onClick={() => onSelect(m.id)}>
-                      Select &amp; view details
-                    </button>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))
             ) : (
               <p style={{ color: "var(--muted)" }}>
                 {config.noMatch}{" "}

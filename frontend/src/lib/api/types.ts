@@ -161,7 +161,7 @@ export const COUNTRY_FLAGS: Record<string, string> = {
 };
 
 // Nagad is paid inside SSLCommerz.
-export const PAYMENT_METHODS = ["sslcommerz", "bkash", "manual"] as const;
+export const PAYMENT_METHODS = ["sslcommerz", "bkash", "eps", "manual"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const PAYMENT_STATUSES = [
@@ -297,7 +297,7 @@ export interface PublicSettings {
   invoice_footer: string;
   vat_bin: string;
   default_fee_poisha: { study: number; job: number; visa: number; remote: number };
-  gateways: { sslcommerz: PublicGateway; bkash: PublicGateway; nagad: PublicGateway; manual: ManualGateway };
+  gateways: { sslcommerz: PublicGateway; bkash: PublicGateway; nagad: PublicGateway; eps: PublicGateway; manual: ManualGateway };
   mail: { sender_name: string; sender_email: string };
   whatsapp: { number: string };
 }
@@ -326,6 +326,8 @@ export interface Settings extends Omit<PublicSettings, "gateways" | "mail" | "wh
     sslcommerz: PublicGateway & { store_id: SecretStatus; store_password: SecretStatus };
     bkash: PublicGateway & { app_key: SecretStatus; app_secret: SecretStatus; username: SecretStatus; password: SecretStatus };
     nagad: PublicGateway & { merchant_id: SecretStatus; private_key: SecretStatus };
+    // B26: EPS (Easy Payment System).
+    eps: PublicGateway & { store_id: SecretStatus; username: SecretStatus; password: SecretStatus; hash_key: SecretStatus };
     manual: ManualGateway;
   };
   mail: {
@@ -356,6 +358,7 @@ export interface SettingsInput extends Omit<PublicSettings, "gateways" | "mail" 
     sslcommerz: PublicGateway & { store_id: string; store_password: string };
     bkash: PublicGateway & { app_key: string; app_secret: string; username: string; password: string };
     nagad: PublicGateway & { merchant_id: string; private_key: string };
+    eps: PublicGateway & { store_id: string; username: string; password: string; hash_key: string };
     manual: ManualGateway;
   };
   mail: {
@@ -919,7 +922,7 @@ export type DocFilter = (typeof DOC_FILTERS)[number];
 
 // ---------- Money ----------
 
-// sslcommerz / bkash: the browser goes to redirect_url. manual: waits for finance.
+// sslcommerz / bkash / eps: the browser goes to redirect_url. manual: waits for finance.
 export interface PayStart {
   payment_id: string;
   redirect_url?: string;
@@ -930,6 +933,43 @@ export interface PayInput {
   method: PaymentMethod;
   phone: string;
   manual_ref?: string;
+}
+
+// ---------- Custom payments (B27): any amount on a case or course enrolment ----------
+
+export const PAYMENT_REQUEST_KINDS = ["requested", "own"] as const;
+export type PaymentRequestKind = (typeof PAYMENT_REQUEST_KINDS)[number];
+export const PAYMENT_REQUEST_STATUSES = ["open", "paid", "cancelled"] as const;
+export type PaymentRequestStatus = (typeof PAYMENT_REQUEST_STATUSES)[number];
+
+export interface PaymentRequest {
+  id: string;
+  ref: string;
+  module: Module;
+  // An application id, or an enrolment id for course.
+  case_id: string;
+  case_ref: string;
+  kind: PaymentRequestKind;
+  description: string;
+  amount_poisha: number;
+  status: PaymentRequestStatus;
+  payment: { id: string; status: PaymentStatus; method: PaymentMethod } | null;
+  invoice_no: string | null;
+  created_at: string;
+  paid_at: string | null;
+}
+
+export interface NewPaymentRequest {
+  module: Module;
+  case_id: string;
+  description: string;
+  amount_poisha: number;
+}
+
+export interface OwnPaymentInput extends PayInput {
+  case_id: string;
+  amount_poisha: number;
+  note: string;
 }
 
 export interface PaymentResult {

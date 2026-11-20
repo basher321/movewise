@@ -95,6 +95,9 @@ export const listAdminVacancies = () => get<Vacancy[]>("/admin/vacancies");
 export const saveVacancy = (id: string | null, vacancy: VacancyInput) =>
   id ? put<Vacancy>("/admin/vacancies/" + id, vacancy) : post<Vacancy>("/admin/vacancies", vacancy);
 
+// B24: marks vacancies as employer verified without opening each one.
+export const verifyVacancies = (ids: string[]) => post<{ verified: number }>("/admin/vacancies/verify", { ids });
+
 export const listAdminRemoteJobs = () => get<Vacancy[]>("/admin/remote-jobs");
 export const saveRemoteJob = (id: string | null, job: VacancyInput) =>
   id ? put<Vacancy>("/admin/remote-jobs/" + id, job) : post<Vacancy>("/admin/remote-jobs", job);

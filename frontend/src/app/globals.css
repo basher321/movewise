@@ -13,8 +13,9 @@ a{color:inherit;text-decoration:none}
 :focus-visible{outline:3px solid var(--a);outline-offset:3px;border-radius:8px}
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px}
 header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+header .wrap{max-width:1360px}
 nav{display:flex;align-items:center;gap:24px;min-height:68px}
-.logo{font:700 21px var(--font-sora);display:flex;align-items:center;gap:10px}
+.logo{font:700 21px var(--font-sora);display:flex;align-items:center;gap:10px;flex-shrink:0}
 .logo img{height:58px;width:auto;background:#F5F5F5;border-radius:12px;padding:3px 10px;display:block}.logo i{width:26px;height:26px;border-radius:50%;background:conic-gradient(from 200deg,#4F46E5,#22D3EE,#4F46E5)}
 nav ul{display:flex;gap:6px;list-style:none;margin:0 auto;padding:0;font-weight:500;font-size:15px}
 nav ul a{display:block;padding:8px 14px;border-radius:99px;color:var(--muted);white-space:nowrap}
@@ -68,14 +69,20 @@ input,textarea,select{width:100%;font:500 16px var(--font-dm-sans);padding:14px 
 textarea{min-height:110px;resize:vertical}
 footer{padding:36px 0 48px;color:var(--muted);font-size:14px;border-top:1px solid var(--line)}
 footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
+/* B26: EPS "Pay with" strip; the light or dark picture follows the theme */
+footer .eps-strip{display:block;margin-bottom:22px}
+footer .eps-strip img{display:block;width:100%;height:auto;border-radius:10px}
+.eps-dark{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .eps-light{display:none}:root:not([data-theme="light"]) .eps-dark{display:block}}
+:root[data-theme="dark"] .eps-light{display:none}:root[data-theme="dark"] .eps-dark{display:block}
 .tag{display:inline-block;font-size:13px;font-weight:700;padding:6px 14px;border-radius:99px;margin-bottom:20px;background:color-mix(in srgb,var(--a) 14%,transparent);color:var(--a)}
 .path{transition:transform .15s,border-color .15s}.path:hover{transform:translateY(-4px)}.path b{display:block;margin-top:16px;color:var(--a);font-size:15px}
 .quote p{color:var(--text);font-size:17px;margin-bottom:16px}.quote b{font-size:14px;color:var(--muted)}
 .auth{display:flex;gap:8px;align-items:center;flex-shrink:0}.auth .btn{white-space:nowrap}.auth span{font-weight:600;font-size:15px}
 /* B19: seven menu items. Between 961px and 1120px the menu is a little tighter; up to 960px it moves to its own row. */
 /* Up to 1360px the menu is compact, so Remote Jobs and Success Stories fit on one line. */
-@media (max-width:1360px) and (min-width:961px){nav{gap:14px}nav ul{gap:2px}nav ul a{padding:8px 9px;font-size:14px}}
-@media (max-width:960px){nav{flex-wrap:wrap;padding:10px 0;gap:8px 16px}nav ul{order:3;width:100%;overflow-x:auto;margin:0}.auth{margin-left:auto}}
+@media (min-width:1201px){nav{gap:14px}nav ul{gap:2px}nav ul a{padding:8px 7px;font-size:14px}}
+@media (max-width:1200px){nav{flex-wrap:wrap;padding:10px 0;gap:8px 16px}nav ul{order:3;width:100%;overflow-x:auto;margin:0}.auth{margin-left:auto}}
 dialog{border:0;border-radius:28px;padding:32px;width:min(420px,calc(100% - 32px));background:var(--surface);color:var(--text);box-shadow:0 40px 90px -30px rgba(14,27,61,.7)}
 dialog::backdrop{background:rgba(7,13,29,.6);backdrop-filter:blur(4px)}
 dialog h3{font-size:26px;margin-bottom:6px}dialog .sub{color:var(--muted);margin:0 0 20px;font-size:15px}

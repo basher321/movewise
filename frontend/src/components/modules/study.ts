@@ -1,5 +1,6 @@
 import { getUniversity, matchUniversities, COUNTRY_FLAGS, type University } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
+import { criteriaGroup } from "./criteria";
 import type { ModuleConfig } from "./types";
 
 const usd = (n: number) => "$" + n.toLocaleString("en-US");
@@ -12,7 +13,7 @@ export const studyConfig: ModuleConfig = {
   base: "/consultancy",
   agent: {
     title: "Meet your Study Advisor Agent",
-    subtitle: "Share your results and budget. The agent matches you with universities where you can realistically get in.",
+    subtitle: "Share your results and budget. The agent shows the universities that fit you best first, then the closest options.",
     fields: [
       { key: "level", label: "Study level", optionsFrom: "study_levels" },
       { key: "field", label: "Field of study", optionsFrom: "study_fields" },
@@ -26,8 +27,9 @@ export const studyConfig: ModuleConfig = {
     name: "Study Advisor Agent",
     icon: "🎓",
     resultsHeading: (n) => n + " universities matched to your profile",
-    noMatch: "Nothing fits that level or field yet. Try another option, or",
+    noMatch: "Nothing fits your details yet. Try changing them, or",
     nothingOpen: "Universities are being added. Please check back soon, or talk to an advisor.",
+    group: criteriaGroup,
   },
   match: async (inputs) =>
     (
@@ -87,9 +89,9 @@ export const studyConfig: ModuleConfig = {
     authNote: "Create your Student Consultancy account to apply, then sign in to continue.",
     lockedBefore: "Pay the one-time application fee of ",
     lockedAfter:
-      " to unlock the official application link. Once the payment succeeds, the link appears here and you can apply on the university website.",
-    payButtonSuffix: " to unlock link",
-    paidText: "Complete the official application on the university website. After you submit, your advisor updates your stages here.",
+      " to start your application. Once the payment succeeds, our team applies to the university for you and you follow every stage here.",
+    payButtonSuffix: " to start processing",
+    paidText: "Your application is with our team. Upload your documents below; your advisor applies to the university for you and updates your stages here.",
     hasLink: true,
     linkButton: "Open official application ↗",
     noLink: "Application link coming soon",

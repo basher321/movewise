@@ -17,7 +17,7 @@ from sqlalchemy.engine import Connection, RowMapping
 
 from app.audit import Actor, write_audit
 from app.notify.outbox import queue_message
-from app.payments import bkash, sslcommerz
+from app.payments import bkash, eps, sslcommerz
 from app.payments.gateway import GatewayConfig, GatewayError, gateway_config, poisha_from_taka, scrub
 from app.payments.invoices import METHOD_LABELS, issue_invoice
 from app.payments.ledger import add_entry
@@ -46,6 +46,21 @@ def register_on_refunded(ref_type: str, handler: OnPaid) -> None:
     ON_REFUNDED[ref_type] = handler
 
 
+# B27: what happens to the paid-for item when its payment ends without money (failed, cancelled,
+# abandoned, rejected). Applications and enrolments: nothing.
+ON_ENDED: dict[str, OnPaid] = {}
+
+
+def register_on_ended(ref_type: str, handler: OnPaid) -> None:
+    ON_ENDED[ref_type] = handler
+
+
+def payment_ended(conn: Connection, payment: RowMapping) -> None:
+    handler = ON_ENDED.get(payment["ref_type"])
+    if handler is not None:
+        handler(conn, payment)
+
+
 def money_text(poisha: int) -> str:
     taka_part, rest = divmod(int(poisha), 100)
     return f"৳{taka_part:,}" if rest == 0 else f"৳{taka_part:,}.{rest:02d}"
@@ -55,6 +70,15 @@ def new_tran_id(conn: Connection) -> str:
     exists = text("SELECT 1 FROM payments WHERE tran_id = :t")
     while True:
         tran = "MW-" + "".join(secrets.choice(_TRAN_ALPHABET) for _ in range(12))
+        if conn.execute(exists, {"t": tran}).first() is None:
+            return tran
+
+
+def new_eps_tran_id(conn: Connection) -> str:
+    """EPS wants a unique merchantTransactionId of at least 10 digits: 16 random digits (B26)."""
+    exists = text("SELECT 1 FROM payments WHERE tran_id = :t")
+    while True:
+        tran = str(secrets.choice("123456789")) + "".join(secrets.choice("0123456789") for _ in range(15))
         if conn.execute(exists, {"t": tran}).first() is None:
             return tran
 
@@ -77,8 +101,15 @@ def notify_person(
     )
 
 
-def _application_id(payment: RowMapping) -> Any:
-    return payment["ref_id"] if payment["ref_type"] == "application" else None
+def application_id_of(conn: Connection, payment: RowMapping) -> Any:
+    """The case a payment belongs to, for linking its messages (B27: also custom payments)."""
+    if payment["ref_type"] == "application":
+        return payment["ref_id"]
+    if payment["ref_type"] == "request":
+        return conn.execute(
+            text("SELECT application_id FROM payment_requests WHERE id = :id"), {"id": payment["ref_id"]}
+        ).scalar_one_or_none()
+    return None
 
 
 def lock_payment(conn: Connection, payment_id: Any) -> RowMapping:
@@ -138,7 +169,7 @@ def mark_paid(
         f"Payment received - {invoice['no']}",
         f"We received {money_text(payment['amount_poisha'])} for {payment['purpose']}. "
         f"Your invoice is {invoice['no']}; you can open it in your profile.",
-        _application_id(payment),
+        application_id_of(conn, payment),
     )
     write_audit(conn, actor, "payment.paid", f"{invoice['no']} · {money_text(payment['amount_poisha'])}")
     payment_event(conn, payment["id"], "paid", {"invoice_no": invoice["no"], "by": actor.name})
@@ -226,6 +257,7 @@ def record_end(
         return payment
     payment = _set(conn, payment["id"], status=status)
     payment_event(conn, payment["id"], kind, detail)
+    payment_ended(conn, payment)
     write_audit(conn, SYSTEM, f"payment.{status}", payment["tran_id"])
     return payment
 
@@ -236,6 +268,7 @@ def record_mismatch(conn: Connection, payment_id: Any, detail: Any) -> RowMappin
         return payment
     payment = _set(conn, payment["id"], status="failed")
     payment_event(conn, payment["id"], "mismatch", detail)
+    payment_ended(conn, payment)
     write_audit(conn, SYSTEM, "payment.mismatch", payment["tran_id"])
     logger.warning("Payment answer did not match: payment %s", payment["id"])
     return payment
@@ -316,10 +349,59 @@ def confirm_bkash(conn: Connection, payment: RowMapping) -> RowMapping:
     return bkash_status(conn, payment, config)
 
 
+# ---------------------------------------------------------------- EPS (B26)
+
+EPS_GRACE = "30 minutes"
+
+
+def _eps_old(conn: Connection, payment: RowMapping) -> bool:
+    return bool(
+        conn.execute(
+            text(f"SELECT now() - created_at > interval '{EPS_GRACE}' FROM payments WHERE id = :id"),
+            {"id": payment["id"]},
+        ).scalar_one()
+    )
+
+
+def eps_status(conn: Connection, payment: RowMapping, outcome: str | None = None) -> RowMapping:
+    """Ask EPS what happened. Only "Success" with the same id and amount marks paid.
+    EPS reports a started, unpaid payment as "Cancel", so any other answer ends the payment only
+    when the payer came back through the fail / cancel address, or the payment is over 30 minutes
+    old (spec B26 Decisions 3e)."""
+    config = gateway_config(conn, "eps")
+    # A late success for an abandoned or cancelled payment is still recorded (B07 duplicate rule).
+    if config is None or payment["status"] not in ("initiated", "abandoned", "cancelled"):
+        return payment
+    try:
+        data = eps.status(config, payment["tran_id"])
+    except GatewayError:
+        logger.warning("EPS status unreachable: payment %s", payment["id"])
+        data = {}
+    secret_values = (*config.secrets.values(), *eps.known_tokens())
+    state = str(data.get("Status") or "") if data.get("ErrorCode") in (None, "", 0) else ""
+    detail = scrub(data, secret_values)
+    if state == "Success":
+        ok = str(data.get("MerchantTransactionId", "")) == payment["tran_id"] and poisha_from_taka(
+            data.get("TotalAmount")
+        ) == int(payment["amount_poisha"])
+        if not ok:
+            return record_mismatch(conn, payment["id"], detail)
+        return record_success(conn, payment["id"], str(data.get("EPSTransactionId") or "") or None, detail)
+    if outcome in ("fail", "cancel"):
+        ended: Literal["failed", "cancelled"] = "failed" if outcome == "fail" else "cancelled"
+        return record_end(conn, payment["id"], ended, f"gateway_{outcome}", {"source": "eps return", "eps": detail})
+    if state and _eps_old(conn, payment):
+        ended = "failed" if state.lower() in ("fail", "failed") else "cancelled"
+        return record_end(conn, payment["id"], ended, "eps_" + state.lower()[:20], detail)
+    return payment
+
+
 def refresh_initiated(conn: Connection, payment: RowMapping) -> RowMapping:
     """Before a new start: find out what happened to an earlier initiated payment."""
     if payment["method"] == "bkash":
         payment = bkash_status(conn, payment)
+    elif payment["method"] == "eps":
+        payment = eps_status(conn, payment)
     if payment["status"] == "initiated":
         payment = record_end(conn, payment["id"], "abandoned", "abandoned", {"reason": "a new payment was started"})
     return payment

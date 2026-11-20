@@ -73,6 +73,7 @@ export {
   saveUniversity,
   listAdminVacancies,
   saveVacancy,
+  verifyVacancies,
   listAdminVisaPrograms,
   saveVisaProgram,
   listAdminRemoteJobs,
@@ -110,6 +111,12 @@ export {
 // money
 export {
   getMyPayment,
+  myPaymentRequests,
+  payPaymentRequest,
+  payOwnAmount,
+  listPaymentRequests,
+  createPaymentRequest,
+  cancelPaymentRequest,
   myInvoices,
   getMyInvoice,
   requestRefund,

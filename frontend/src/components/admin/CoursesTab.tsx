@@ -13,10 +13,12 @@ import {
 } from "@/lib/api";
 import { formatDate, formatMoney } from "@/lib/format";
 import { errorText } from "../auth/messages";
+import { StaffCustomPayments } from "../payment/CustomPayments";
 import { METHOD_NAMES } from "../payment/methods";
 import AdminTable from "./AdminTable";
 import { GroupMessageDialog, MessageDialog, SendDocumentDialog } from "./ClientMessaging";
 import ResetPasswordButton from "./ResetPasswordButton";
+import WhatsAppLink from "./WhatsAppLink";
 import type { ShowToast } from "./Toast";
 
 const STATUS: Record<EnrolmentStatus, [string, string]> = {
@@ -177,6 +179,7 @@ export default function CoursesTab({ toast, onSignedOut = () => undefined }: { t
                   </button>
                 ) : null}
               </div>
+              {r.status !== "cancelled" ? <StaffCustomPayments module="course" caseId={r.id} toast={toast} onSignedOut={onSignedOut} /> : null}
             </div>
           ))}
         </div>
@@ -205,7 +208,9 @@ export default function CoursesTab({ toast, onSignedOut = () => undefined }: { t
               cell: (a) => (
                 <>
                   {a.email || "–"}
-                  <small>{a.phone || "–"}</small>
+                  <small>
+                    {a.phone || "–"} <WhatsAppLink phone={a.phone} name={a.name} />
+                  </small>
                 </>
               ),
             },

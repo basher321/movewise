@@ -174,6 +174,17 @@ def test_claude_request_shape(client: TestClient, setup: dict[str, Any], fake: F
     assert providers.answer_text("claude", refused) == ("", "declined")
 
 
+def test_study_question_names_a_university_beyond_the_form_matches(client: TestClient, setup: dict[str, Any], fake: FakeProviders) -> None:
+    for n in range(10):
+        made = client.post("/api/admin/universities", json=university_body(name=f"Aaa College {n}", tuition_usd=100))
+        assert made.status_code == 200, made.text
+    inputs = {"level": "Bachelor", "field": "Computer Science", "gpa": 3.5, "ielts": 7, "budget_usd": 25000}
+    assert "Maple Ridge University" in ask(client, "study", "What does Maple cost?", inputs).json()["answer"]
+    save_ai(client, setup["body"], ai_block(("claude",)))
+    ask(client, "study", "What does Maple cost?", inputs)
+    assert "Maple Ridge University" in fake.bodies()[-1]["messages"][0]["content"]
+
+
 # b142
 def test_b142_prompt_has_only_public_facts(client: TestClient, setup: dict[str, Any], fake: FakeProviders) -> None:
     save_ai(client, setup["body"], ai_block(("claude",)))

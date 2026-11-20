@@ -31,6 +31,7 @@ function stored(changes: Partial<Settings> = {}): Settings {
       sslcommerz: { enabled: false, sandbox: true, store_id: no, store_password: no },
       bkash: { enabled: false, sandbox: true, app_key: no, app_secret: no, username: no, password: no },
       nagad: { enabled: false, sandbox: true, merchant_id: no, private_key: no },
+      eps: { enabled: false, sandbox: true, store_id: no, username: no, password: no, hash_key: no },
       manual: { enabled: true, instructions: "" },
     },
     mail: { sender_name: "", sender_email: "", smtp_host: "", smtp_port: 587, smtp_security: "starttls", smtp_username: "", smtp_password: no, webmail_url: "" },
@@ -85,6 +86,21 @@ describe("settings form", () => {
     expect(validateSettings(form, s)).toBe("SSLCommerz is turned on: please fill in Store ID and Store password.");
     setSecret(form, "ssl_id", "store");
     setSecret(form, "ssl_pass", "pass");
+    expect(validateSettings(form, s)).toBeNull();
+  });
+
+  it("needs the four EPS secrets when EPS is on (B26)", () => {
+    const s = stored();
+    const form = toForm(s);
+    expect(form.gateways.eps.hash_key).toBe("");
+    form.gateways.eps.enabled = true;
+    setSecret(form, "eps_store", "store");
+    expect(validateSettings(form, s)).toBe("EPS is turned on: please fill in Username, Password and Hash key.");
+    setSecret(form, "eps_user", "user");
+    setSecret(form, "eps_pass", "pass");
+    setSecret(form, "eps_hash", "hash");
+    expect(validateSettings(form, s)).toBeNull();
+    form.gateways.manual.enabled = false;
     expect(validateSettings(form, s)).toBeNull();
   });
 

@@ -7,6 +7,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import type { ShowToast } from "../admin/Toast";
 import CertificateCanvas from "../course/CertificateCanvas";
 import { METHOD_NAMES } from "../payment/methods";
+import { MyCustomPayments } from "../payment/CustomPayments";
 import MyInvoices from "../payment/MyInvoices";
 
 // The Courses tab of the profile (showProfile("course") and section 6 in the reference):
@@ -89,6 +90,12 @@ export default function CourseProfile({ account, toast }: { account: ApplicantAc
           No courses yet. <Link href="/courses">See all courses</Link>
         </p>
       )}
+      <MyCustomPayments
+        module="course"
+        cases={data.filter((e) => e.status !== "cancelled").map((e) => ({ id: e.id, ref: e.order_no, title: e.course.title }))}
+        phone={account.phone}
+        toast={toast}
+      />
       <MyInvoices module="course" toast={toast} />
     </div>
   );

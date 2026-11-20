@@ -211,8 +211,8 @@ def job_input(**changes: Any) -> dict[str, Any]:
     ("changes", "percent", "labels"),
     [
         ({}, 100, ["GPA meets 3", "IELTS meets 6.5", "Within budget"]),
-        ({"gpa": 2.5}, 75, ["GPA below 3", "IELTS meets 6.5", "Within budget"]),
-        ({"ielts": 0, "budget_usd": 10000}, 55, ["GPA meets 3", "IELTS 6.5 needed", "Above budget (~$20,000)"]),
+        ({"gpa": 2.5}, 86, ["GPA below 3", "IELTS meets 6.5", "Within budget"]),
+        ({"ielts": 0, "budget_usd": 10000}, 72, ["GPA meets 3", "IELTS 6.5 needed", "Above budget (~$20,000)"]),
     ],
 )
 def test_b36_match_study(client: TestClient, owner: None, changes: dict[str, Any], percent: int, labels: list[str]) -> None:
@@ -220,10 +220,25 @@ def test_b36_match_study(client: TestClient, owner: None, changes: dict[str, Any
     make(client, "universities", university_body(name="Other Field", fields=["Business"]))
     make(client, "universities", university_body(name="Hidden", published=False))
     result = client.post("/api/match/study", json=study_input(**changes)).json()
-    assert len(result) == 1
+    assert [m["item"]["name"] for m in result][1:] == ["Other Field"]
     assert result[0]["match_percent"] == percent
-    assert [c["label"] for c in result[0]["checks"]] == labels
+    assert [c["label"] for c in result[0]["checks"]] == ["Bachelor offered", "Computer Science offered", *labels]
     assert "apply_link" not in result[0]["item"]
+
+
+def test_match_study_orders_by_criteria_met(client: TestClient, owner: None) -> None:
+    uni = {"levels": ["Bachelor"], "fields": ["Computer Science"], "min_gpa": 3, "min_ielts": 6.5, "tuition_usd": 20000}
+    make(client, "universities", university_body(**{**uni, "name": "One", "levels": ["PhD"], "fields": ["Law"], "min_gpa": 4, "min_ielts": 9}))
+    make(client, "universities", university_body(**{**uni, "name": "Two", "min_gpa": 4, "min_ielts": 9, "tuition_usd": 90000}))
+    make(client, "universities", university_body(**{**uni, "name": "Three other field", "fields": ["Law"], "min_ielts": 9}))
+    make(client, "universities", university_body(**{**uni, "name": "Three right field", "min_ielts": 9, "tuition_usd": 90000}))
+    make(client, "universities", university_body(**{**uni, "name": "Four", "tuition_usd": 90000}))
+    make(client, "universities", university_body(**{**uni, "name": "All"}))
+    make(client, "universities", university_body(**{**uni, "name": "None", "levels": ["PhD"], "fields": ["Law"], "min_gpa": 4, "min_ielts": 9, "tuition_usd": 90000}))
+    result = client.post("/api/match/study", json=study_input()).json()
+    assert [m["item"]["name"] for m in result] == ["All", "Four", "Three right field", "Three other field", "Two", "One"]
+    assert [sum(c["ok"] for c in m["checks"]) for m in result] == [5, 4, 3, 3, 2, 1]
+    assert [m["match_percent"] for m in result] == sorted((m["match_percent"] for m in result), reverse=True)
 
 
 def test_match_study_preferred_country(client: TestClient, owner: None) -> None:
@@ -393,7 +408,7 @@ def test_catalog_options(client: TestClient, conn: Connection, owner: None) -> N
     options = client.get("/api/catalog/options").json()
     assert options["study_levels"] == ["Bachelor", "Master"]
     assert options["study_fields"] == ["Computer Science"]
-    assert options["occupations"] == ["Electrician"]
+    assert options["occupations"] == ["Electrician", "Construction", "Healthcare", "Hospitality", "Technology"]
     countries = options["countries"]
     assert countries[0] == "Any country" and len(countries) == len(set(countries)) > 190
     assert {"Japan", "Saudi Arabia", "UAE", "UK", "USA", "Malaysia", "Bangladesh"} <= set(countries)
@@ -404,6 +419,11 @@ def test_catalog_options(client: TestClient, conn: Connection, owner: None) -> N
     license_modules(conn, "study")
     assert client.get("/api/catalog/options").json()["occupations"] == []
     assert client.get("/api/catalog/options").json()["countries"] == []
+
+
+def test_occupations_are_offered_before_any_vacancy_exists(client: TestClient, conn: Connection) -> None:
+    license_modules(conn, "job")
+    assert client.get("/api/catalog/options").json()["occupations"] == ["Construction", "Healthcare", "Hospitality", "Technology"]
 
 
 def test_admin_vacancy_flags_past_apply_by(client: TestClient, conn: Connection, owner: None) -> None:

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { COUNTRY_FLAGS, myApplications, type ApplicantAccount, type AppModule, type AppStatus, type MyApplicationSummary } from "@/lib/api";
 import type { ShowToast } from "../admin/Toast";
 import { configOf } from "../modules";
+import { MyCustomPayments } from "../payment/CustomPayments";
 import MyInvoices from "../payment/MyInvoices";
 
 const STATUS: Record<AppStatus, [string, string]> = {
@@ -66,6 +67,12 @@ export default function ApplicationsProfile({ module, account, toast }: { module
           .
         </p>
       )}
+      <MyCustomPayments
+        module={module}
+        cases={apps.filter((a) => a.status === "active" || a.status === "on_hold").map((a) => ({ id: a.id, ref: a.ref, title: a.item_title }))}
+        phone={account.phone}
+        toast={toast}
+      />
       <MyInvoices module={module} toast={toast} />
     </div>
   );

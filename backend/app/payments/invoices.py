@@ -24,7 +24,7 @@ _INSERT = text(
     ":vat_bin, :footer) RETURNING *"
 )
 
-METHOD_LABELS = {"sslcommerz": "SSLCommerz", "bkash": "bKash", "manual": "Bank transfer / office"}
+METHOD_LABELS = {"sslcommerz": "SSLCommerz", "bkash": "bKash", "eps": "EPS", "manual": "Bank transfer / office"}
 
 
 def issue_invoice(conn: Connection, payment: RowMapping) -> RowMapping:

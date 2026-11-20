@@ -134,6 +134,10 @@ class VacancyIn(BaseModel):
     fee_override_poisha: StrictInt | None = None
 
 
+class VerifyVacanciesIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=1000)
+
+
 class VisaProgramIn(BaseModel):
     title: str = Field(max_length=500)
     country: str = Field(max_length=500)
@@ -484,6 +488,33 @@ async def create_vacancy(
     body = parse_body(VacancyIn, await request.body())
     fee = default_fees(conn)["job"]
     return _create_vacancy(conn, actor, body, fee, remote=False)
+
+
+@router.post("/admin/vacancies/verify")
+async def verify_vacancies(
+    request: Request, actor: Actor = Depends(require_owner("job")), conn: Connection = Depends(get_conn)
+) -> dict[str, int]:
+    """B24: marks on-site vacancies as employer verified, all or nothing. Nothing else changes."""
+    body = parse_body(VerifyVacanciesIn, await request.body())
+    ids = list({parse_uuid(value, "Vacancy") for value in body.ids})
+    rows = conn.execute(
+        text(
+            "SELECT id, title, employer, employer_verified FROM vacancies "
+            "WHERE id = ANY(CAST(:ids AS uuid[])) AND NOT remote ORDER BY id FOR UPDATE"
+        ),
+        {"ids": ids},
+    ).mappings().all()
+    if len(rows) != len(ids):
+        raise not_found("Vacancy")
+    verified = 0
+    for row in rows:
+        if row["employer_verified"]:
+            continue
+        values = {"employer_verified": True}
+        _update(conn, "vacancies", row["id"], values)
+        _verified_audit(conn, actor, {**values, "employer": row["employer"], "title": row["title"]})
+        verified += 1
+    return {"verified": verified}
 
 
 def _create_vacancy(conn: Connection, actor: Actor, body: VacancyIn, fee: int, remote: bool) -> dict[str, Any]:

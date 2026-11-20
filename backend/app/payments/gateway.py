@@ -25,15 +25,20 @@ TRANSPORT: httpx.BaseTransport | None = None
 for _name in ("httpx", "httpcore"):
     logging.getLogger(_name).setLevel(logging.WARNING)
 
-Gateway = Literal["sslcommerz", "bkash"]
+Gateway = Literal["sslcommerz", "bkash", "eps"]
 
 SECRET_FIELDS: dict[Gateway, tuple[str, ...]] = {
     "sslcommerz": ("store_id", "store_password"),
     "bkash": ("app_key", "app_secret", "username", "password"),
+    # B26: EPS secrets live in app_secrets (0008), the others in settings_secrets (0002).
+    "eps": ("store_id", "username", "password", "hash_key"),
 }
 
 # Keys never stored in payment_events or logs, whatever the gateway sends back.
-_SECRET_KEY_PARTS = ("passwd", "password", "secret", "token", "app_key", "x-app-key", "username", "store_id")
+_SECRET_KEY_PARTS = (
+    "passwd", "password", "secret", "token", "app_key", "x-app-key", "username", "store_id", "storeid",
+    "hash_key", "hashkey", "x-hash",
+)
 _CARD_KEYS = {"card_no", "card_number", "cardnumber", "pan", "cvv"}
 
 
@@ -59,7 +64,11 @@ def gateway_config(conn: Connection, gateway: Gateway) -> GatewayConfig | None:
     names = [f"{gateway}.{field}" for field in SECRET_FIELDS[gateway]]
     stored = dict(
         conn.execute(
-            text("SELECT name, ciphertext FROM settings_secrets WHERE name = ANY(:names)"), {"names": names}
+            text(
+                "SELECT name, ciphertext FROM settings_secrets WHERE name = ANY(:names) "
+                "UNION ALL SELECT name, ciphertext FROM app_secrets WHERE name = ANY(:names)"
+            ),
+            {"names": names},
         ).all()
     )
     secrets: dict[str, str] = {}

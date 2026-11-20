@@ -8,9 +8,14 @@ import type {
   LedgerSummary,
   Module,
   NewLedgerEntry,
+  NewPaymentRequest,
+  OwnPaymentInput,
   OutstandingItem,
   Page,
+  PaymentRequest,
   PaymentResult,
+  PayInput,
+  PayStart,
   PendingPayment,
   Refund,
 } from "../types";
@@ -23,6 +28,20 @@ export const myInvoices = (module: Module) => get<Invoice[]>(`/me/${module}/invo
 export const getMyInvoice = (module: Module, no: string) => get<Invoice>(`/me/${module}/invoices/${encodeURIComponent(no)}`);
 export const requestRefund = (module: Module, invoiceNo: string, reason: string) =>
   post<Refund>(`/me/${module}/refunds`, { invoice_no: invoiceNo, reason });
+
+// B27: payments due (asked for by staff) and paying an amount of one's own.
+export const myPaymentRequests = (module: Module) => get<{ items: PaymentRequest[] }>(`/me/${module}/payment-requests`);
+export const payPaymentRequest = (module: Module, id: string, input: PayInput) =>
+  post<PayStart>(`/me/${module}/payment-requests/${encodeURIComponent(id)}/pay`, input);
+export const payOwnAmount = (module: Module, input: OwnPaymentInput) => post<PayStart>(`/me/${module}/own-payments`, input);
+
+// ---------- staff: custom payments of a case (super admin, or an admin of that section) ----------
+
+export const listPaymentRequests = (module: Module, caseId: string) =>
+  get<{ items: PaymentRequest[] }>("/admin/payment-requests", { module, case_id: caseId });
+export const createPaymentRequest = (input: NewPaymentRequest) => post<PaymentRequest>("/admin/payment-requests", input);
+export const cancelPaymentRequest = (id: string) =>
+  post<PaymentRequest>(`/admin/payment-requests/${encodeURIComponent(id)}/cancel`);
 
 // ---------- finance (super admin or finance) ----------
 
