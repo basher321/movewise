@@ -46,6 +46,7 @@ from app.routers import team as team_router
 from app.routers import success as success_router
 from app.routers import custom_payments as custom_payments_router
 from app.routers import cv as cv_router
+from app.routers import cv_agent as cv_agent_router
 
 MAX_BODY_BYTES = 3 * 1024 * 1024
 TOO_LARGE_MESSAGE = "Request body is larger than 3 MB."
@@ -205,6 +206,7 @@ def create_app() -> FastAPI:
     app.include_router(pay_router.router, prefix="/api")
     app.include_router(custom_payments_router.router, prefix="/api")
     app.include_router(cv_router.router, prefix="/api")
+    app.include_router(cv_agent_router.router, prefix="/api")
     app.include_router(finance_router.router, prefix="/api")
     app.include_router(notifications_router.router, prefix="/api")
     app.include_router(enrolments_router.router, prefix="/api")

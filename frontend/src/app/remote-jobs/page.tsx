@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Button from "@/components/Button";
+import CvAgentCard from "@/components/cv/CvAgentCard";
 import LiveProgress from "@/components/LiveProgress";
 import PageShell from "@/components/PageShell";
 import PartnerStrip from "@/components/PartnerStrip";
@@ -33,6 +34,7 @@ export default function RemoteJobsPage() {
       <section id="r-agent">
         <div className="wrap">
           <ModuleAgent module="remote" />
+          <CvAgentCard module="remote" text="A clear international CV for remote employers, tailored to the job advert you paste." />
         </div>
       </section>
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Button from "@/components/Button";
+import CvAgentCard from "@/components/cv/CvAgentCard";
 import Card from "@/components/Card";
 import LiveProgress from "@/components/LiveProgress";
 import PageShell from "@/components/PageShell";
@@ -40,6 +41,7 @@ export default function ConsultancyPage() {
       <section id="s-agent">
         <div className="wrap">
           <StudyAgent />
+          <CvAgentCard module="study" text="A student CV for university and scholarship applications, in the format your destination expects." />
         </div>
       </section>
 

@@ -1,0 +1,39 @@
+# CV Agent country rules (spec B28). Edit freely; the server reads these files when it starts.
+# photo / date_of_birth / marital_status / nationality: never | optional | common. Sections: summary, experience,
+# education, skills, languages, certifications, training, achievements, references, custom.
+country: Canada
+document_name: Resume
+spelling: en-GB
+page_length_default: 2
+photo: never
+date_of_birth: never
+marital_status: never
+nationality: never
+gender: never
+religion: never
+required_sections:
+- summary
+- experience
+- education
+- skills
+- languages
+optional_sections:
+- certifications
+- training
+- achievements
+- references
+- custom
+section_order:
+- summary
+- experience
+- education
+- skills
+- languages
+- certifications
+- training
+- achievements
+- references
+- custom
+date_format: MMM YYYY
+notes: Canadian resumes do not include a photo, age or marital status. Keep it to two pages and match
+  the job advert's keywords honestly.

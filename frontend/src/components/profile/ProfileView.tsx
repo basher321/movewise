@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { MODULES, type ApplicantAccount, type Module } from "@/lib/api";
@@ -103,6 +104,9 @@ export default function ProfileView({ module }: { module?: Module }) {
                     <button className="btn ghost sm" type="button" onClick={() => setDialog("password")}>
                       Change password
                     </button>
+                    <Link className="btn ghost sm" href={"/cv-agent?from=" + current}>
+                      📄 My CVs (AI CV Agent)
+                    </Link>
                   </div>
                 </aside>
                 {current === "course" ? (

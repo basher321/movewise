@@ -203,3 +203,23 @@ pre.out{white-space:pre-wrap;font-size:13px;background:var(--bg);border:1px soli
 /* Not in the reference: partner logo tile (B18). A light tile keeps dark logos readable in dark mode. */
 .plogo{height:64px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px 14px;margin-bottom:18px}
 .plogo img{max-height:46px;max-width:100%;object-fit:contain;display:block}
+
+/* B28 AI CV Agent - not in the reference; built from its tokens and the .modc / .tabs2 card patterns */
+.cvcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(190px,100%),1fr));gap:12px}
+.cvcard{display:block;width:100%;text-align:left;border:1.5px solid var(--line);border-radius:18px;padding:16px;background:var(--surface);color:var(--text);cursor:pointer;font:inherit;transition:border-color .15s,transform .15s}
+.cvcard:hover{transform:translateY(-2px)}.cvcard[aria-pressed=true]{border-color:var(--a);box-shadow:0 0 0 3px color-mix(in srgb,var(--a) 22%,transparent)}
+.cvcard i{font-style:normal;font-size:24px;display:block;margin-bottom:8px}.cvcard b{display:block;font:700 15px var(--font-sora)}.cvcard small{display:block;color:var(--muted);margin-top:4px;font-size:13px}
+.cvsteps{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 22px}.cvsteps button{border:0;font:600 12px var(--font-dm-sans);padding:5px 10px;border-radius:99px;background:var(--bg);color:var(--muted);cursor:pointer}
+.cvsteps button.on{background:var(--a);color:#fff}.cvsteps button.done{color:var(--a)}.cvsteps button:disabled{cursor:default;opacity:.55}
+.cvdrop{border:2px dashed var(--line);border-radius:18px;padding:26px 16px;text-align:center;background:var(--surface);cursor:pointer}.cvdrop.over{border-color:var(--a);background:color-mix(in srgb,var(--a) 6%,var(--surface))}
+.cvfile{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}.cvfile .th{width:44px;height:56px;flex:none;border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;font:700 11px var(--font-sora);color:var(--muted);background:var(--bg);overflow:hidden}
+.cvfile .th img{width:100%;height:100%;object-fit:cover}.cvfile div{min-width:0;flex:1}.cvfile b{display:block;overflow-wrap:anywhere;font-size:14px}
+.cvsplit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start}
+.cvpage{display:block;width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 24px rgba(15,23,42,.10);margin-bottom:14px}
+.cvthumb{display:block;width:100%;aspect-ratio:210/297;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:10px}
+.bd.cf{background:rgba(234,179,8,.18);color:#A16207}
+.tabs2 button[aria-pressed=true]{background:var(--navy);color:var(--on-navy);border-color:var(--navy)}
+.cvsec{border-top:1px solid var(--line);padding:14px 0}.cvsec h4{margin:0;font-size:16px}.cvsec .cr{margin-top:8px;flex-wrap:wrap}
+.cvsrc{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.cvsticky{position:sticky;top:12px}
+@media (max-width:900px){.cvsplit{grid-template-columns:1fr}.cvsticky{position:static}}

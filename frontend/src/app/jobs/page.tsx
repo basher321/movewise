@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Button from "@/components/Button";
+import CvAgentCard from "@/components/cv/CvAgentCard";
 import LiveProgress from "@/components/LiveProgress";
 import PageShell from "@/components/PageShell";
 import PartnerStrip from "@/components/PartnerStrip";
@@ -32,6 +33,7 @@ export default function JobsPage() {
       <section id="j-agent">
         <div className="wrap">
           <ModuleAgent module="job" />
+          <CvAgentCard module="job" text="An overseas-job CV that recruiters and applicant tracking systems can read: upload your documents, click a few options, download PDF and DOCX." />
         </div>
       </section>
 

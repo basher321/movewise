@@ -220,6 +220,13 @@ class AiProviderIn(BaseModel):
     key: str = Field(default="", max_length=5000)
 
 
+class CvIn(BaseModel):
+    """B28: CV Agent limits - days an uploaded file is kept, and AI calls per person per day."""
+
+    file_days: StrictInt
+    ai_per_day: StrictInt
+
+
 class AiIn(BaseModel):
     """B17: provider order, and each provider's switch, model and key ("" keeps the saved key)."""
 
@@ -254,6 +261,8 @@ class SettingsIn(BaseModel):
     whatsapp: WhatsappIn
     # B17: optional, so a body without it keeps the saved AI settings.
     ai: AiIn | None = None
+    # B28: optional, so a body without it keeps the saved CV Agent limits.
+    cv: CvIn | None = None
 
 
 def _columns(body: SettingsIn) -> dict[str, Any]:
@@ -460,6 +469,9 @@ _SELECT_IMAGE: dict[ImageKind, Any] = {
 }
 
 
+_UPDATE_CV = text(
+    "UPDATE settings SET cv_file_days = :file_days, cv_ai_per_day = :ai_per_day WHERE singleton = 'settings'"
+)
 _UPDATE_AI = text("UPDATE settings SET ai = :ai WHERE singleton = 'settings'").bindparams(bindparam("ai", type_=JSONB))
 
 
@@ -577,6 +589,8 @@ def _full_view(conn: Connection) -> dict[str, Any]:
         target = view["gateways"][group] if group in GATEWAY_SECRETS else view[group]
         target[field] = status
     view["ai"] = _ai_view(conn)
+    cv = conn.execute(text("SELECT cv_file_days, cv_ai_per_day FROM settings WHERE singleton = 'settings'")).one()
+    view["cv"] = {"file_days": cv.cv_file_days, "ai_per_day": cv.cv_ai_per_day}
     return view
 
 
@@ -631,6 +645,12 @@ async def save_settings(
     if body.ai is not None:
         ai_value = _validate_ai(body.ai, _saved_ai_keys(conn))
 
+    if body.cv is not None:
+        if not 1 <= body.cv.file_days <= 365:
+            raise ApiError("VALIDATION", 422, "CV files can be kept from 1 to 365 days.")
+        if not 1 <= body.cv.ai_per_day <= 1000:
+            raise ApiError("VALIDATION", 422, "AI calls per person per day must be from 1 to 1000.")
+
     columns = _columns(body)
     if columns["default_fee_visa_poisha"] is None:
         columns["default_fee_visa_poisha"] = old["default_fee_visa_poisha"]
@@ -652,6 +672,10 @@ async def save_settings(
         for name, value in ai_keys.items():
             save_secret(conn, name, value)
             changed.append(name)
+    old_cv = conn.execute(text("SELECT cv_file_days, cv_ai_per_day FROM settings WHERE singleton = 'settings'")).one()
+    if body.cv is not None and (old_cv.cv_file_days, old_cv.cv_ai_per_day) != (body.cv.file_days, body.cv.ai_per_day):
+        conn.execute(_UPDATE_CV, {"file_days": body.cv.file_days, "ai_per_day": body.cv.ai_per_day})
+        changed.append("cv")
     write_audit(conn, actor, "settings.saved", "Settings saved: " + (", ".join(changed) or "no changes"))
     return _full_view(conn)
 

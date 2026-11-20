@@ -419,6 +419,35 @@ export default function SettingsTab({ toast }: { toast: ShowToast }) {
             <AiProviders ai={form.ai} stored={stored} onChange={(ai) => patch((s) => { s.ai = ai; })} />
           </Section>
         ) : null}
+        {form.cv ? (
+          <Section
+            title="AI CV Agent"
+            sub="Applicants build their CVs free of charge with the AI providers above. These limits protect your AI costs and their privacy."
+          >
+            <div className="fgrid">
+              <label className="fl">
+                <span>AI actions per person per day</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={form.cv.ai_per_day}
+                  onChange={(e) => patch((s) => { if (s.cv) s.cv.ai_per_day = Number(e.target.value); })}
+                />
+              </label>
+              <label className="fl">
+                <span>Keep uploaded CV documents for (days)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={form.cv.file_days}
+                  onChange={(e) => patch((s) => { if (s.cv) s.cv.file_days = Number(e.target.value); })}
+                />
+              </label>
+            </div>
+          </Section>
+        ) : null}
         <p className="err" role="alert" id="serr">
           {error}
         </p>

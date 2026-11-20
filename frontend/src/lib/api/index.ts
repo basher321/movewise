@@ -2,6 +2,7 @@
 // through ./http (spec B10). Errors are ApiError with the backend's code and status.
 
 export * from "./types";
+export * from "./cvTypes";
 export { ApiError, isApiError, NETWORK_MESSAGE, type ErrorCode } from "./errors";
 export { apiUrl } from "./http/client";
 
@@ -211,3 +212,33 @@ export {
   previewGroupMessage,
   sendGroupMessage,
 } from "./http/certificates";
+
+// AI CV Agent (B28)
+export {
+  getCvOptions,
+  listCvs,
+  createCv,
+  getCv,
+  saveCv,
+  duplicateCv,
+  deleteCv,
+  giveCvConsent,
+  removeCvFile,
+  uploadCvFile,
+  MAX_CV_FILE_BYTES,
+  getCvState,
+  readCvFile,
+  mergeCvFiles,
+  answerCv,
+  saveCvData,
+  undoCv,
+  generateCv,
+  cvSectionAction,
+  cvPages,
+  reviewCv,
+  approveCv,
+  makeCoverLetter,
+  saveCoverLetter,
+  cvPreviewUrl,
+  cvExportUrl,
+} from "./http/cv";

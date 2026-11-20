@@ -1,0 +1,39 @@
+# CV Agent country rules (spec B28). Edit freely; the server reads these files when it starts.
+# photo / date_of_birth / marital_status / nationality: never | optional | common. Sections: summary, experience,
+# education, skills, languages, certifications, training, achievements, references, custom.
+country: Netherlands
+document_name: CV
+spelling: en-GB
+page_length_default: 2
+photo: optional
+date_of_birth: optional
+marital_status: never
+nationality: optional
+gender: never
+religion: never
+required_sections:
+- summary
+- experience
+- education
+- skills
+- languages
+optional_sections:
+- certifications
+- training
+- achievements
+- references
+- custom
+section_order:
+- summary
+- experience
+- education
+- skills
+- languages
+- certifications
+- training
+- achievements
+- references
+- custom
+date_format: MMM YYYY
+notes: European employers expect a clear CV of up to two pages. A photo is common but optional; add one
+  only when the advert asks for it.

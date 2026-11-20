@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Button from "@/components/Button";
+import CvAgentCard from "@/components/cv/CvAgentCard";
 import LiveProgress from "@/components/LiveProgress";
 import PageShell from "@/components/PageShell";
 import PartnerStrip from "@/components/PartnerStrip";
@@ -28,6 +29,11 @@ export default function CoursesPage() {
       </div>
 
       <CourseGroups />
+      <section>
+        <div className="wrap">
+          <CvAgentCard module="course" text="Finished a course? Add it to an international CV in minutes: upload your certificates and the agent does the rest." />
+        </div>
+      </section>
 
       <section className="band">
         <div className="wrap">

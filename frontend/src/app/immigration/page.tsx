@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Button from "@/components/Button";
+import CvAgentCard from "@/components/cv/CvAgentCard";
 import LiveProgress from "@/components/LiveProgress";
 import PageShell from "@/components/PageShell";
 import PartnerStrip from "@/components/PartnerStrip";
@@ -33,6 +34,7 @@ export default function ImmigrationPage() {
       <section id="v-agent">
         <div className="wrap">
           <ModuleAgent module="visa" />
+          <CvAgentCard module="visa" text="A skilled-migration CV that follows the rules of your destination country, built from your own documents." />
         </div>
       </section>
 

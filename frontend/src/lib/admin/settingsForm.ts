@@ -151,6 +151,7 @@ export function toForm(s: Settings): SettingsInput {
         AI_PROVIDERS.map((p) => [p, { enabled: s.ai.providers[p].enabled, model: s.ai.providers[p].model, key: "" }]),
       ) as NonNullable<SettingsInput["ai"]>["providers"],
     },
+    ...(s.cv ? { cv: { ...s.cv } } : {}),
   };
 }
 
@@ -185,6 +186,12 @@ export function validateSettings(form: SettingsInput, stored: Settings): string 
     return "Default fees must be whole taka above 0.";
   }
   if (!Number.isInteger(form.mail.smtp_port) || form.mail.smtp_port < 1 || form.mail.smtp_port > 65535) return "SMTP port must be from 1 to 65535.";
+  if (form.cv) {
+    if (!Number.isInteger(form.cv.file_days) || form.cv.file_days < 1 || form.cv.file_days > 365) return "CV files can be kept from 1 to 365 days.";
+    if (!Number.isInteger(form.cv.ai_per_day) || form.cv.ai_per_day < 1 || form.cv.ai_per_day > 1000) {
+      return "AI CV Agent actions per person per day must be from 1 to 1000.";
+    }
+  }
   const webmail = form.mail.webmail_url.trim();
   if (webmail && (!webmail.startsWith("https://") || /\s/.test(webmail))) {
     return "The webmail link must start with https:// (for example https://webmail.example.com).";

@@ -350,6 +350,13 @@ export interface Settings extends Omit<PublicSettings, "gateways" | "mail" | "wh
     api_version: string;
   };
   ai: AiSettings;
+  // B28: CV Agent limits (super admin only).
+  cv?: CvLimits;
+}
+
+export interface CvLimits {
+  file_days: number;
+  ai_per_day: number;
 }
 
 // What saveSettings sends. A secret left "" keeps the saved value.
@@ -381,6 +388,8 @@ export interface SettingsInput extends Omit<PublicSettings, "gateways" | "mail" 
   };
   // B17: optional; without it the saved AI settings stay as they are.
   ai?: AiSettingsInput;
+  // B28: optional; without it the saved CV Agent limits stay as they are.
+  cv?: CvLimits;
 }
 
 export interface LicenceView {
